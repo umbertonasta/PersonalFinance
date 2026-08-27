@@ -387,7 +387,7 @@ function Modal({ open, onClose, children, wide = false }) {
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 30, opacity: 0 }}
-            className={`max-h-[92vh] w-full overflow-auto rounded-t-[2rem] bg-white p-6 shadow-2xl dark:bg-slate-900 sm:rounded-[2rem] ${wide ? "max-w-3xl" : "max-w-xl"}`}
+            className={`max-h-[92vh] w-full overflow-auto rounded-t-[2rem] border border-slate-200 bg-white p-6 text-slate-950 shadow-2xl dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 sm:rounded-[2rem] ${wide ? "max-w-3xl" : "max-w-xl"}`}
             onMouseDown={(e) => e.stopPropagation()}
           >
             {children}
@@ -818,16 +818,18 @@ function App() {
       </div>
     );
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe_0,_transparent_28%),radial-gradient(circle_at_top_right,_#d1fae5_0,_transparent_22%),linear-gradient(to_bottom,_#f8fafc,_#eef2ff)] pb-24 text-slate-900">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10)_0,_transparent_24%),linear-gradient(to_bottom,_#f8fafc,_#eef2f7)] pb-24 text-slate-950 transition-colors duration-300 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(52,211,153,0.11)_0,_transparent_25%),linear-gradient(to_bottom,_#070b14,_#0b1220)] dark:text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6">
-        <header className="mb-7 flex flex-wrap items-center justify-between gap-4">
+        <header className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/65 dark:shadow-black/20">
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-950 text-white shadow-xl">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-600/20 dark:from-emerald-400 dark:to-cyan-500 dark:text-slate-950 dark:shadow-emerald-500/20">
               <Landmark />
             </div>
             <div>
-              <h1 className="text-2xl font-black">Il mio patrimonio</h1>
-              <p className="text-xs text-slate-500">
+              <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">
+                Il mio patrimonio
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Chiarezza oggi, libertà domani.
               </p>
             </div>
@@ -1614,20 +1616,22 @@ function Stat({ title, value, subtitle, icon: Icon, color, action }) {
     <motion.button
       whileHover={{ y: -3 }}
       onClick={action}
-      className="rounded-3xl border border-white/70 bg-white/80 p-5 text-left shadow-sm"
+      className="rounded-[1.75rem] border border-white/70 bg-white/80 p-5 text-left shadow-sm shadow-slate-900/5 backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-slate-900/80 dark:shadow-black/20"
     >
       <div className={`mb-4 inline-flex rounded-2xl p-3 ${map[color]}`}>
         <Icon size={20} />
       </div>
       <div className="text-sm text-slate-500">{title}</div>
-      <div className="text-2xl font-black">{value}</div>
+      <div className="text-2x1 font-black text-slate-950 dark:text-white">
+        {value}
+      </div>
       {subtitle && <div className="text-xs text-slate-400">{subtitle}</div>}
     </motion.button>
   );
 }
 function Panel({ title, subtitle, children }) {
   return (
-    <Card className="rounded-3xl border-white/70 bg-white/80 shadow-sm">
+    <Card className="rounded-[1.75rem] border border-white/70 bg-white/80 shadow-sm shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80 dark:shadow-black/20">
       <CardContent className="p-5 sm:p-6">
         <h2 className="text-lg font-black">{title}</h2>
         <p className="mb-5 text-sm text-slate-400">{subtitle}</p>
@@ -1639,7 +1643,7 @@ function Panel({ title, subtitle, children }) {
 function TxRow({ t, onReview, onEdit, onDelete }) {
   const c = t.category ? cat(t.category) : { icon: "❓", color: "#f97316" };
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
+    <div className="flex items-center gap-3 rounded-2xl border border-transparent bg-slate-50/80 p-3 transition hover:border-slate-200 hover:bg-white dark:bg-slate-800/55 dark:hover:border-slate-700 dark:hover:bg-slate-800">
       <div
         className="grid h-11 w-11 place-items-center rounded-xl text-xl"
         style={{ background: `${c.color}18` }}

@@ -8,7 +8,7 @@ export const Input = forwardRef(function Input(
     <input
       ref={ref}
       type={type}
-      className={`w-full border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 ${className}`}
+      className={`w-full rounded-xl border border-slate-200 bg-white/85 px-3 py-2 text-slate-950 shadow-sm outline-none transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-600 dark:hover:border-slate-600 dark:focus:border-emerald-400 dark:focus:ring-emerald-400/10 ${className}`}
       {...props}
     />
   );

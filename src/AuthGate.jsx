@@ -7,11 +7,15 @@ import {
   LockKeyhole,
   LogOut,
   Mail,
+  Moon,
   ShieldCheck,
+  Sun,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+const THEME_KEY = "personal-finance-theme";
 
 export default function AuthGate({ children }) {
   const [session, setSession] = useState(null);
@@ -22,6 +26,16 @@ export default function AuthGate({ children }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem(THEME_KEY) || "dark";
+  });
+
+  useEffect(() => {
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     let mounted = true;
@@ -41,16 +55,14 @@ export default function AuthGate({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
-        setSession(currentSession);
-        setCheckingSession(false);
+    } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      setSession(currentSession);
+      setCheckingSession(false);
 
-        if (event === "SIGNED_OUT") {
-          setPassword("");
-        }
-      },
-    );
+      if (event === "SIGNED_OUT") {
+        setPassword("");
+      }
+    });
 
     return () => {
       mounted = false;
@@ -60,7 +72,6 @@ export default function AuthGate({ children }) {
 
   async function handleLogin(event) {
     event.preventDefault();
-
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !password) {
@@ -73,29 +84,18 @@ export default function AuthGate({ children }) {
     setMessage("");
     setMessageType("");
 
-    const { error } =
-      await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
 
     if (error) {
       setMessageType("error");
 
-      if (
-        error.message
-          .toLowerCase()
-          .includes("invalid login credentials")
-      ) {
+      if (error.message.toLowerCase().includes("invalid login credentials")) {
         setMessage("Email o password non corretti.");
-      } else if (
-        error.message
-          .toLowerCase()
-          .includes("email not confirmed")
-      ) {
-        setMessage(
-          "Devi confermare l'indirizzo email prima di accedere.",
-        );
+      } else if (error.message.toLowerCase().includes("email not confirmed")) {
+        setMessage("Devi confermare l'indirizzo email prima di accedere.");
       } else {
         setMessage(error.message);
       }
@@ -114,14 +114,21 @@ export default function AuthGate({ children }) {
     await supabase.auth.signOut();
   }
 
+  function toggleTheme() {
+    setTheme((currentTheme) =>
+      currentTheme === "dark" ? "light" : "dark",
+    );
+  }
+
   if (checkingSession) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-950 text-white">
+      <div className="app-loading-screen" role="status" aria-live="polite">
         <div className="text-center">
-          <LoaderCircle className="mx-auto h-9 w-9 animate-spin text-emerald-400" />
-
-          <p className="mt-4 text-sm text-slate-400">
-            Verifica della sessione
+          <div className="loading-orbit mx-auto">
+            <LoaderCircle className="h-8 w-8 animate-spin" />
+          </div>
+          <p className="mt-5 text-sm font-medium text-slate-400">
+            Prepariamo il tuo spazio
           </p>
         </div>
       </div>
@@ -130,169 +137,137 @@ export default function AuthGate({ children }) {
 
   if (!session) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
-        <div className="absolute left-[-120px] top-[-120px] h-96 w-96 rounded-full bg-blue-600 opacity-20 blur-3xl" />
+      <main className="auth-shell">
+        <div className="auth-ambient auth-ambient-one" />
+        <div className="auth-ambient auth-ambient-two" />
 
-        <div className="absolute bottom-[-140px] right-[-100px] h-[420px] w-[420px] rounded-full bg-emerald-500 opacity-20 blur-3xl" />
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="theme-switch theme-switch-auth"
+          aria-label={
+            theme === "dark"
+              ? "Attiva la modalità chiara"
+              : "Attiva la modalità scura"
+          }
+          title={theme === "dark" ? "Modalità chiara" : "Modalità scura"}
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
 
-        <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-12 px-5 py-10 lg:grid-cols-2 lg:px-8">
-          <section className="hidden lg:block">
-            <div className="mb-7 grid h-16 w-16 place-items-center rounded-3xl bg-white text-slate-950 shadow-2xl">
+        <div className="auth-layout">
+          <section className="auth-story" aria-label="Presentazione">
+            <div className="brand-mark brand-mark-large">
               <Landmark size={30} />
             </div>
-
-            <h1 className="max-w-xl text-5xl font-black leading-tight tracking-tight">
-              Tutte le tue finanze.
+            <p className="auth-eyebrow">PERSONAL FINANCE</p>
+            <h1>
+              Più chiarezza.
               <br />
-              Finalmente chiare.
+              Meno rumore.
             </h1>
-
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-400">
-              Entrate, spese, budget e investimenti in un unico
-              spazio personale, protetto e progettato per durare
-              negli anni.
+            <p className="auth-description">
+              Uno spazio semplice e personale per seguire il denaro con calma,
+              capire le abitudini e costruire obiettivi nel tempo.
             </p>
-
-            <div className="mt-10 flex items-center gap-3 text-sm text-slate-300">
-              <div className="rounded-2xl bg-emerald-400 p-3 text-slate-950">
-                <ShieldCheck size={21} />
-              </div>
-
-              <div>
-                <b className="block text-white">
-                  Accesso protetto da Supabase
-                </b>
-
-                <span className="text-slate-500">
-                  Ogni utente può accedere soltanto ai propri dati.
-                </span>
-              </div>
+            <div className="auth-trust">
+              <span className="auth-trust-icon">
+                <ShieldCheck size={19} />
+              </span>
+              <span>
+                <strong>Privato e sincronizzato</strong>
+                <small>I dati restano associati al tuo account.</small>
+              </span>
             </div>
           </section>
 
-          <section className="mx-auto w-full max-w-md">
-            <div className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
-              <div className="mb-8">
-                <div className="mb-5 grid h-13 w-13 place-items-center rounded-2xl bg-white text-slate-950 lg:hidden">
-                  <Landmark size={25} />
+          <section className="auth-card" aria-labelledby="login-title">
+            <div className="brand-mark auth-mobile-mark">
+              <Landmark size={24} />
+            </div>
+            <p className="auth-eyebrow">BENTORNATO</p>
+            <h2 id="login-title">Entra nel tuo spazio</h2>
+            <p className="auth-card-description">
+              Accedi per consultare e aggiornare le tue finanze.
+            </p>
+
+            <form onSubmit={handleLogin} className="mt-8 space-y-5">
+              <label className="block">
+                <span className="field-label">Email</span>
+                <div className="field-with-icon">
+                  <Mail size={18} aria-hidden="true" />
+                  <Input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="nome@esempio.it"
+                    className="h-12 pl-11"
+                  />
                 </div>
+              </label>
 
-                <p className="text-sm font-bold text-emerald-400">
-                  PERSONAL FINANCE
-                </p>
-
-                <h2 className="mt-2 text-3xl font-black">
-                  Bentornato
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-400">
-                  Accedi per consultare e aggiornare le tue finanze.
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleLogin}
-                className="space-y-4"
-              >
-                <label className="block">
-                  <span className="mb-2 block text-sm font-bold text-slate-200">
-                    Email
-                  </span>
-
-                  <div className="relative">
-                    <Mail className="absolute left-4 top-3.5 h-5 w-5 text-slate-500" />
-
-                    <Input
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(event) =>
-                        setEmail(event.target.value)
-                      }
-                      placeholder="nome@esempio.it"
-                      className="h-12 rounded-xl border-white/10 bg-slate-900/70 pl-12 text-white placeholder:text-slate-600 focus:border-emerald-400 focus:ring-emerald-400/20"
-                    />
-                  </div>
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-bold text-slate-200">
-                    Password
-                  </span>
-
-                  <div className="relative">
-                    <LockKeyhole className="absolute left-4 top-3.5 h-5 w-5 text-slate-500" />
-
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(event) =>
-                        setPassword(event.target.value)
-                      }
-                      placeholder="Inserisci la password"
-                      className="h-12 rounded-xl border-white/10 bg-slate-900/70 pl-12 pr-12 text-white placeholder:text-slate-600 focus:border-emerald-400 focus:ring-emerald-400/20"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowPassword(
-                          (currentValue) => !currentValue,
-                        )
-                      }
-                      className="absolute right-4 top-3.5 text-slate-500 transition hover:text-white"
-                      aria-label={
-                        showPassword
-                          ? "Nascondi password"
-                          : "Mostra password"
-                      }
-                    >
-                      {showPassword ? (
-                        <EyeOff size={20} />
-                      ) : (
-                        <Eye size={20} />
-                      )}
-                    </button>
-                  </div>
-                </label>
-
-                {message && (
-                  <div
-                    className={`rounded-xl border p-3 text-sm ${
-                      messageType === "error"
-                        ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
-                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                    }`}
+              <label className="block">
+                <span className="field-label">Password</span>
+                <div className="field-with-icon">
+                  <LockKeyhole size={18} aria-hidden="true" />
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Inserisci la password"
+                    className="h-12 pl-11 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="password-visibility"
+                    aria-label={
+                      showPassword ? "Nascondi password" : "Mostra password"
+                    }
                   >
-                    {message}
-                  </div>
-                )}
+                    {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
+                </div>
+              </label>
 
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="h-12 w-full rounded-xl bg-emerald-400 text-base font-black text-slate-950 hover:bg-emerald-300"
+              {message && (
+                <div
+                  className={`auth-message ${
+                    messageType === "error"
+                      ? "auth-message-error"
+                      : "auth-message-success"
+                  }`}
+                  role="status"
                 >
-                  {submitting ? (
-                    <>
-                      <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
-                      Accesso in corso
-                    </>
-                  ) : (
-                    "Accedi"
-                  )}
-                </Button>
-              </form>
+                  {message}
+                </div>
+              )}
 
-              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500">
-                <ShieldCheck size={14} />
-                Sessione protetta e mantenuta sul dispositivo
-              </div>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="h-12 w-full rounded-2xl"
+              >
+                {submitting ? (
+                  <>
+                    <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
+                    Accesso in corso
+                  </>
+                ) : (
+                  "Accedi"
+                )}
+              </Button>
+            </form>
+
+            <div className="auth-footnote">
+              <ShieldCheck size={14} />
+              Sessione protetta e mantenuta sul dispositivo
             </div>
           </section>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -300,14 +275,31 @@ export default function AuthGate({ children }) {
     <>
       {children}
 
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-2xl transition hover:bg-slate-800"
-      >
-        <LogOut size={17} />
-        Esci
-      </button>
+      <div className="floating-controls" aria-label="Controlli applicazione">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="theme-switch"
+          aria-label={
+            theme === "dark"
+              ? "Attiva la modalità chiara"
+              : "Attiva la modalità scura"
+          }
+          title={theme === "dark" ? "Modalità chiara" : "Modalità scura"}
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="logout-button"
+          aria-label="Esci dall'account"
+        >
+          <LogOut size={17} />
+          <span>Esci</span>
+        </button>
+      </div>
     </>
   );
 }
