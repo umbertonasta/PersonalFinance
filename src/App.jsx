@@ -51,6 +51,9 @@ import {
   updateTransaction,
   upsertMerchantRule,
 } from "@/lib/financeDb";
+import CsvImporter from "@/components/CsvImporter";
+import { importCsvTransactions } from "@/lib/csvFinanceDb";
+import TaxonomyManager from "@/components/taxonomy/TaxonomyManager";
 
 /*
   ARCHITETTURA PRONTA PER SUPABASE E OPEN BANKING
@@ -449,6 +452,7 @@ function App() {
   const [tab, setTab] = useState("dashboard");
   const [txModal, setTxModal] = useState(false);
   const [bankModal, setBankModal] = useState(false);
+  const [csvModal, setCsvModal] = useState(false);
   const [reviewItem, setReviewItem] = useState(null);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({
@@ -792,6 +796,47 @@ function App() {
     }
   }
 
+  async function handleCsvImport(csvTransactions) {
+    const result = await importCsvTransactions(csvTransactions);
+
+    if (result.inserted.length > 0) {
+      setTransactions((previousTransactions) => {
+        const combined = [...result.inserted, ...previousTransactions];
+
+        return combined.sort((first, second) => {
+          return second.date.localeCompare(first.date);
+        });
+      });
+    }
+
+    setCsvModal(false);
+
+    if (result.insertedCount === 0) {
+      setToast({
+        type: "success",
+        message: `Nessun nuovo movimento. ${result.duplicateCount} duplicati ignorati.`,
+      });
+
+      return;
+    }
+
+    const message =
+      result.duplicateCount > 0
+        ? `${result.insertedCount} movimenti importati. ${result.duplicateCount} duplicati ignorati.`
+        : `${result.insertedCount} movimenti importati correttamente.`;
+
+    setToast({
+      type: "success",
+      message,
+    });
+
+    setDatabaseMessage(
+      `Database collegato. Transazioni cloud trovate: ${
+        transactions.length + result.insertedCount
+      }`,
+    );
+  }
+
   function exportBackup() {
     const blob = new Blob(
       [
@@ -853,6 +898,14 @@ function App() {
             >
               <Link2 className="mr-2 h-4 w-4" />
               Conti
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-2xl bg-white/70"
+              onClick={() => setCsvModal(true)}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Importa CSV
             </Button>
             <Button
               className="rounded-2xl bg-slate-950"
@@ -1122,6 +1175,16 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             className="grid gap-4 lg:grid-cols-3"
           >
+            <div className="lg:col-span-3">
+              <TaxonomyManager
+                onChanged={() => {
+                  setToast({
+                    type: "success",
+                    message: "Organizzazione aggiornata",
+                  });
+                }}
+              />
+            </div>
             <SystemCard
               icon={Database}
               title="Supabase"
@@ -1326,6 +1389,14 @@ function App() {
                 : "Aggiungi"}
           </Button>
         </div>
+      </Modal>
+
+      <Modal open={csvModal} onClose={() => setCsvModal(false)} wide>
+        <CsvImporter
+          rules={rules}
+          onImport={handleCsvImport}
+          onClose={() => setCsvModal(false)}
+        />
       </Modal>
 
       <Modal open={bankModal} onClose={() => setBankModal(false)}>
