@@ -1,5 +1,5 @@
 import { CalendarDays, GitCompareArrows } from "lucide-react";
-import { COMPARISON_OPTIONS, PERIOD_PRESETS } from "@/lib/dateRanges";
+import { COMPARISON_OPTIONS, PERIOD_PRESETS, todayIso } from "@/lib/dateRanges";
 
 export default function PeriodSelector({
   preset,
@@ -13,6 +13,8 @@ export default function PeriodSelector({
   customComparisonRange,
   onCustomComparisonRangeChange,
 }) {
+  const today = todayIso();
+
   return (
     <section className="rounded-[1.6rem] border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -74,7 +76,11 @@ export default function PeriodSelector({
             <input
               type="date"
               value={customRange.start}
-              max={customRange.end || undefined}
+              max={
+                customRange.end && customRange.end < today
+                  ? customRange.end
+                  : today
+              }
               onChange={(event) =>
                 onCustomRangeChange({
                   ...customRange,
@@ -92,6 +98,7 @@ export default function PeriodSelector({
               type="date"
               value={customRange.end}
               min={customRange.start || undefined}
+              max={today}
               onChange={(event) =>
                 onCustomRangeChange({ ...customRange, end: event.target.value })
               }
@@ -110,7 +117,11 @@ export default function PeriodSelector({
             <input
               type="date"
               value={customComparisonRange.start}
-              max={customComparisonRange.end || undefined}
+              max={
+                customComparisonRange.end && customComparisonRange.end < today
+                  ? customComparisonRange.end
+                  : today
+              }
               onChange={(event) =>
                 onCustomComparisonRangeChange({
                   ...customComparisonRange,
@@ -128,6 +139,7 @@ export default function PeriodSelector({
               type="date"
               value={customComparisonRange.end}
               min={customComparisonRange.start || undefined}
+              max={today}
               onChange={(event) =>
                 onCustomComparisonRangeChange({
                   ...customComparisonRange,

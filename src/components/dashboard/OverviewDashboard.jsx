@@ -38,6 +38,7 @@ import {
   inRange,
   rangeFromPreset,
   rangeDurationDays,
+  todayIso,
 } from "@/lib/dateRanges";
 import SmallExpenses from "@/components/analytics/SmallExpenses";
 import RecurringExpenses from "@/components/analytics/RecurringExpenses";
@@ -77,25 +78,31 @@ export default function OverviewDashboard({
   const [yearDetail, setYearDetail] = useState(null);
   const [customRange, setCustomRange] = useState({
     start: `${month}-01`,
-    end: new Date(
-      new Date(`${month}-01T12:00:00`).getFullYear(),
-      new Date(`${month}-01T12:00:00`).getMonth() + 1,
-      0,
-      12,
-    )
-      .toISOString()
-      .slice(0, 10),
+    end: (() => {
+      const monthEnd = new Date(
+        new Date(`${month}-01T12:00:00`).getFullYear(),
+        new Date(`${month}-01T12:00:00`).getMonth() + 1,
+        0,
+        12,
+      )
+        .toISOString()
+        .slice(0, 10);
+      return monthEnd > todayIso() ? todayIso() : monthEnd;
+    })(),
   });
   const [customComparisonRange, setCustomComparisonRange] = useState({
     start: `${month}-01`,
-    end: new Date(
-      new Date(`${month}-01T12:00:00`).getFullYear(),
-      new Date(`${month}-01T12:00:00`).getMonth() + 1,
-      0,
-      12,
-    )
-      .toISOString()
-      .slice(0, 10),
+    end: (() => {
+      const monthEnd = new Date(
+        new Date(`${month}-01T12:00:00`).getFullYear(),
+        new Date(`${month}-01T12:00:00`).getMonth() + 1,
+        0,
+        12,
+      )
+        .toISOString()
+        .slice(0, 10);
+      return monthEnd > todayIso() ? todayIso() : monthEnd;
+    })(),
   });
   const [insightDetail, setInsightDetail] = useState(null);
 
@@ -192,6 +199,9 @@ export default function OverviewDashboard({
           title="Entrate"
           value={model.income}
           change={model.incomeChange}
+          compareValue={model.comparisonIncome}
+          kind="income"
+          description="Totale delle entrate ricevute nel periodo selezionato"
           icon={ArrowUpRight}
           tone="emerald"
         />
@@ -199,13 +209,21 @@ export default function OverviewDashboard({
           title="Spese"
           value={model.expenses}
           change={model.expenseChange}
+          compareValue={model.comparisonExpenses}
+          kind="expense"
+          description="Totale delle uscite sostenute nel periodo selezionato"
           icon={ArrowDownRight}
           tone="rose"
-          reverse
         />
         <MetricCard
           title="Saldo del periodo"
           value={model.balance}
+          description={`Entrate ${euro.format(model.income)} meno spese ${euro.format(model.expenses)}`}
+          explanation={
+            model.balance >= 0
+              ? `Nel periodo sono rimasti ${euro.format(model.balance)}`
+              : `Le spese superano le entrate di ${euro.format(Math.abs(model.balance))}`
+          }
           icon={Wallet}
           tone="blue"
         />
@@ -213,16 +231,41 @@ export default function OverviewDashboard({
           title="Tasso di risparmio"
           value={model.savingRate}
           percent
+          description="Percentuale delle entrate rimasta dopo aver sottratto le spese"
+          explanation={
+            model.income > 0
+              ? `Sono rimasti ${euro.format(Math.max(model.savingRate, 0))} ogni 100 € ricevuti`
+              : "Non calcolabile senza entrate nel periodo"
+          }
           icon={Target}
           tone="violet"
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.55fr_.85fr]">
+      <section className="grid items-start gap-4 xl:grid-cols-[1.55fr_.85fr]">
         <DashboardPanel
           title="Il ritmo del tuo denaro"
-          subtitle="Entrate e spese negli ultimi sei mesi"
+          subtitle={`Entrate e spese · ${range.label}`}
         >
+          <div className="mb-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/35">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+              <span className="mr-1 font-black uppercase tracking-wide text-slate-400">
+                Periodo selezionato
+              </span>
+              <LegendItem color="#34d399" label="Entrate" />
+              <LegendItem color="#fb7185" label="Spese" />
+            </div>
+            {compareRange && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-200/70 pt-2 text-xs dark:border-slate-700">
+                <span className="mr-1 font-black uppercase tracking-wide text-slate-400">
+                  Confronto
+                </span>
+                <LegendItem color="#34d399" label="Entrate" dashed />
+                <LegendItem color="#fb7185" label="Spese" dashed />
+                <span className="text-slate-400">{compareRange.label}</span>
+              </div>
+            )}
+          </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
@@ -260,7 +303,7 @@ export default function OverviewDashboard({
                 <Area
                   type="monotone"
                   dataKey="income"
-                  name="Entrate"
+                  name="Entrate · periodo selezionato"
                   stroke="#34d399"
                   fill="url(#incomeFill)"
                   strokeWidth={3}
@@ -268,11 +311,35 @@ export default function OverviewDashboard({
                 <Area
                   type="monotone"
                   dataKey="expenses"
-                  name="Spese"
+                  name="Spese · periodo selezionato"
                   stroke="#fb7185"
                   fill="url(#expenseFill)"
                   strokeWidth={3}
                 />
+                {compareRange && (
+                  <Area
+                    type="monotone"
+                    dataKey="comparisonIncome"
+                    name="Entrate · confronto"
+                    stroke="#34d399"
+                    fill="transparent"
+                    strokeWidth={2}
+                    strokeDasharray="7 6"
+                    strokeOpacity={0.55}
+                  />
+                )}
+                {compareRange && (
+                  <Area
+                    type="monotone"
+                    dataKey="comparisonExpenses"
+                    name="Spese · confronto"
+                    stroke="#fb7185"
+                    fill="transparent"
+                    strokeWidth={2}
+                    strokeDasharray="7 6"
+                    strokeOpacity={0.55}
+                  />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -857,10 +924,13 @@ function MetricCard({
   title,
   value,
   change,
+  compareValue,
+  kind,
+  description,
+  explanation,
   icon: Icon,
   tone,
   percent,
-  reverse,
 }) {
   const colors = {
     emerald: "bg-emerald-400/12 text-emerald-600 dark:text-emerald-300",
@@ -868,7 +938,13 @@ function MetricCard({
     blue: "bg-blue-400/12 text-blue-600 dark:text-blue-300",
     violet: "bg-violet-400/12 text-violet-600 dark:text-violet-300",
   };
-  const good = reverse ? change <= 0 : change >= 0;
+  const increased = change > 0;
+  const isGood = kind === "expense" ? !increased : increased;
+  const direction = increased ? "in più" : "in meno";
+  const subject = kind === "expense" ? "spese" : "entrate";
+  const difference = compareValue == null ? null : value - compareValue;
+  const DirectionIcon = increased ? TrendingUp : TrendingDown;
+
   return (
     <div className="rounded-[1.6rem] border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80">
       <div className={`inline-flex rounded-xl p-2.5 ${colors[tone]}`}>
@@ -880,17 +956,59 @@ function MetricCard({
       <strong className="mt-1 block text-2xl font-black tracking-tight text-slate-950 dark:text-white">
         {percent ? `${value.toFixed(1)}%` : euro.format(value)}
       </strong>
-      {change != null && Number.isFinite(change) && (
-        <span
-          className={`mt-2 inline-flex items-center gap-1 text-xs font-bold ${good ? "text-emerald-600" : "text-rose-600"}`}
+      {description && (
+        <p className="mt-2 text-xs leading-relaxed text-slate-400">
+          {description}
+        </p>
+      )}
+      {change != null && Number.isFinite(change) && kind && (
+        <div
+          className={`mt-3 rounded-xl px-3 py-2 text-xs ${isGood ? "bg-emerald-400/10 text-emerald-600 dark:text-emerald-300" : "bg-rose-400/10 text-rose-600 dark:text-rose-300"}`}
         >
-          {change >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{" "}
-          {Math.abs(change).toFixed(0)}% sul mese prima
-        </span>
+          <strong className="flex items-center gap-1.5">
+            <DirectionIcon size={14} /> {Math.abs(change).toFixed(0)}% di{" "}
+            {subject} {direction}
+          </strong>
+          {difference != null && (
+            <span className="mt-1 block opacity-80">
+              {euro.format(Math.abs(difference))} {direction} rispetto al
+              confronto
+            </span>
+          )}
+        </div>
+      )}
+      {explanation && (
+        <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-300">
+          {explanation}
+        </p>
       )}
     </div>
   );
 }
+function LegendItem({ color, label, dashed = false }) {
+  return (
+    <span className="inline-flex items-center gap-2 font-semibold text-slate-600 dark:text-slate-300">
+      <span className="relative block h-2 w-7" aria-hidden="true">
+        <span
+          className="absolute left-0 right-0 top-1/2 -translate-y-1/2 border-t-2"
+          style={{
+            borderColor: color,
+            borderTopStyle: dashed ? "dashed" : "solid",
+            opacity: dashed ? 0.65 : 1,
+          }}
+        />
+        {!dashed && (
+          <span
+            className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+        )}
+      </span>
+      {label}
+    </span>
+  );
+}
+
 function DashboardPanel({ title, subtitle, children }) {
   return (
     <section className="rounded-[1.75rem] border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80 sm:p-6">
@@ -1084,7 +1202,7 @@ function buildDashboardModel(
     .map(([name, value]) => ({ name, value }))
     .sort((first, second) => second.value - first.value);
 
-  const trend = buildTrend(transactions, range);
+  const trend = buildTrend(transactions, range, compareRange);
   const expenseCount = periodRows.filter(
     (item) => item.type === "expense",
   ).length;
@@ -1095,6 +1213,8 @@ function buildDashboardModel(
     expenses,
     balance: income - expenses,
     savingRate: income ? ((income - expenses) / income) * 100 : 0,
+    comparisonIncome: compareRange ? previousIncome : null,
+    comparisonExpenses: compareRange ? previousExpenses : null,
     incomeChange: compareRange ? change(income, previousIncome) : null,
     expenseChange: compareRange ? change(expenses, previousExpenses) : null,
     categories,
@@ -1109,46 +1229,64 @@ function buildDashboardModel(
   };
 }
 
-function buildTrend(transactions, range) {
+function buildTrend(transactions, range, compareRange) {
   const granularity = chooseGranularity(range);
-  const rows = transactions.filter((item) => inRange(item.date, range));
+  const currentStart = new Date(`${range.start}T12:00:00`);
+  const comparisonStart = compareRange
+    ? new Date(`${compareRange.start}T12:00:00`)
+    : null;
   const buckets = new Map();
 
-  rows.forEach((item) => {
-    const date = new Date(`${item.date}T12:00:00`);
-    let key;
-    let label;
+  function addRows(selectedRange, prefix, baseDate) {
+    if (!selectedRange) return;
+    transactions
+      .filter((item) => inRange(item.date, selectedRange))
+      .forEach((item) => {
+        const date = new Date(`${item.date}T12:00:00`);
+        let offset;
+        let label;
+        if (granularity === "day") {
+          offset = Math.round((date - baseDate) / 86400000);
+          label = new Date(
+            currentStart.getTime() + offset * 86400000,
+          ).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+        } else if (granularity === "week") {
+          offset = Math.floor((date - baseDate) / 86400000 / 7);
+          label = `Set. ${offset + 1}`;
+        } else {
+          offset =
+            (date.getFullYear() - baseDate.getFullYear()) * 12 +
+            date.getMonth() -
+            baseDate.getMonth();
+          label = new Date(
+            currentStart.getFullYear(),
+            currentStart.getMonth() + offset,
+            1,
+            12,
+          ).toLocaleDateString("it-IT", { month: "short", year: "2-digit" });
+        }
+        const bucket = buckets.get(offset) || {
+          offset,
+          label,
+          income: 0,
+          expenses: 0,
+          comparisonIncome: 0,
+          comparisonExpenses: 0,
+        };
+        const key = prefix
+          ? `${prefix}${item.type === "income" ? "Income" : "Expenses"}`
+          : item.type === "income"
+            ? "income"
+            : "expenses";
 
-    if (granularity === "day") {
-      key = item.date;
-      label = date.toLocaleDateString("it-IT", {
-        day: "numeric",
-        month: "short",
+        bucket[key] += Number(item.amount);
+        buckets.set(offset, bucket);
       });
-    } else if (granularity === "week") {
-      const monday = new Date(date);
-      const day = monday.getDay() || 7;
-      monday.setDate(monday.getDate() - day + 1);
-      key = monday.toISOString().slice(0, 10);
-      label = `Set. ${monday.toLocaleDateString("it-IT", { day: "numeric", month: "short" })}`;
-    } else {
-      key = item.date.slice(0, 7);
-      label = date.toLocaleDateString("it-IT", {
-        month: "short",
-        year: "2-digit",
-      });
-    }
+  }
 
-    const bucket = buckets.get(key) || { key, label, income: 0, expenses: 0 };
-    bucket[item.type === "income" ? "income" : "expenses"] += Number(
-      item.amount,
-    );
-    buckets.set(key, bucket);
-  });
-
-  return [...buckets.values()].sort((first, second) =>
-    first.key.localeCompare(second.key),
-  );
+  addRows(range, "", currentStart);
+  addRows(compareRange, "comparison", comparisonStart);
+  return [...buckets.values()].sort((a, b) => a.offset - b.offset);
 }
 
 function buildCategoryTrend(

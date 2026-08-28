@@ -51,7 +51,8 @@ function toTransactionRow(transaction, userId) {
     category_id: transaction.categoryId || transaction.category_id || null,
     subcategory_id:
       transaction.subcategoryId || transaction.subcategory_id || null,
-    microcategory_id: transaction.microcategoryId || transaction.microcategory_id || null,
+    microcategory_id:
+      transaction.microcategoryId || transaction.microcategory_id || null,
     notes: transaction.notes || null,
     suggested_category: transaction.suggested_category || null,
     confidence:
@@ -282,4 +283,58 @@ export async function setTransactionTags(transactionId, tagIds = []) {
     if (insertError) throw insertError;
   }
   return uniqueIds;
+}
+
+export async function updateMerchantRule(ruleId, changes) {
+  const databaseChanges = {};
+  if ("pattern" in changes)
+    databaseChanges.pattern = String(changes.pattern || "").trim();
+  if ("normalized_merchant" in changes)
+    databaseChanges.normalized_merchant =
+      String(changes.normalized_merchant || "").trim() || null;
+  if ("category" in changes)
+    databaseChanges.category = changes.category || null;
+  if ("category_id" in changes)
+    databaseChanges.category_id = changes.category_id || null;
+  if ("subcategory_id" in changes)
+    databaseChanges.subcategory_id = changes.subcategory_id || null;
+  if ("microcategory_id" in changes)
+    databaseChanges.microcategory_id = changes.microcategory_id || null;
+  if ("remember_microcategory" in changes)
+    databaseChanges.remember_microcategory = Boolean(
+      changes.remember_microcategory,
+    );
+  if ("active" in changes) databaseChanges.active = Boolean(changes.active);
+
+  if (!databaseChanges.pattern) {
+    throw new Error("Il testo da riconoscere non può essere vuoto.");
+  }
+
+  const { data, error } = await supabase
+    .from("merchant_rules")
+    .update(databaseChanges)
+    .eq("id", ruleId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return {
+    id: data.id,
+    pattern: data.pattern,
+    normalized_merchant: data.normalized_merchant || "",
+    category: data.category,
+    category_id: data.category_id,
+    subcategory_id: data.subcategory_id,
+    microcategory_id: data.microcategory_id,
+    remember_microcategory: data.remember_microcategory,
+    active: data.active,
+  };
+}
+
+export async function deleteMerchantRule(ruleId) {
+  const { error } = await supabase
+    .from("merchant_rules")
+    .delete()
+    .eq("id", ruleId);
+  if (error) throw error;
 }

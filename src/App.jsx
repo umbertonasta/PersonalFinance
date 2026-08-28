@@ -6,8 +6,10 @@ import {
   BarChart3,
   Building2,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleHelp,
   Cloud,
   Database,
@@ -46,15 +48,18 @@ import { Input } from "@/components/ui/input";
 import {
   createTransaction,
   deleteTransaction,
+  deleteMerchantRule,
   loadFinanceData,
   saveBudgets,
   setTransactionTags,
+  updateMerchantRule,
   updateTransaction,
   upsertMerchantRule,
 } from "@/lib/financeDb";
 import CsvImporter from "@/components/CsvImporter";
 import { importCsvTransactions } from "@/lib/csvFinanceDb";
 import TaxonomyManager from "@/components/taxonomy/TaxonomyManager";
+import { loadTaxonomy } from "@/lib/taxonomyDb";
 import TransactionDetailsEditor from "@/components/transactions/TransactionDetailsEditor";
 import OverviewDashboard from "@/components/dashboard/OverviewDashboard";
 
@@ -463,6 +468,14 @@ function App() {
       last_sync_at: null,
     },
   ]);
+  const [showAllRules, setShowAllRules] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [savingRule, setSavingRule] = useState(false);
+  const [ruleTaxonomy, setRuleTaxonomy] = useState({
+    categories: [],
+    subcategories: [],
+    microcategories: [],
+  });
   const [budgets, setBudgets] = useState({
     Alimentari: 200,
     Trasporti: 100,
@@ -986,6 +999,84 @@ function App() {
     );
   }
 
+  useEffect(() => {
+    if (tab !== "settings") return;
+    let cancelled = false;
+    loadTaxonomy({ includeHidden: false })
+      .then((data) => {
+        if (!cancelled) setRuleTaxonomy(data);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setToast({
+            type: "error",
+            message:
+              error.message || "Impossibile caricare categorie e dettagli",
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab]);
+
+  async function saveEditedRule() {
+    if (!editingRule) return;
+    setSavingRule(true);
+    try {
+      const saved = await updateMerchantRule(editingRule.id, {
+        pattern: editingRule.pattern,
+        normalized_merchant: editingRule.normalized_merchant,
+        category: editingRule.category,
+        category_id: editingRule.category_id,
+        subcategory_id: editingRule.subcategory_id,
+        microcategory_id:
+          editingRule.microcategoryChoice === "__omit__"
+            ? null
+            : editingRule.microcategory_id,
+        remember_microcategory:
+          editingRule.microcategoryChoice !== "__omit__" &&
+          Boolean(editingRule.microcategory_id),
+        active: editingRule.active,
+      });
+      setRules((current) => current.map((item) => item.id === saved.id ? saved : item));
+      setEditingRule(null);
+      setToast({ type: "success", message: "Regola aggiornata" });
+    } catch (error) {
+      setToast({ type: "error", message: error.message || "Aggiornamento non riuscito" });
+    } finally {
+      setSavingRule(false);
+    }
+  }
+
+  function removeRule(rule) {
+    setConfirmDialog({
+      title: "Elimina regola di classificazione",
+      message: `Vuoi eliminare la regola per “${rule.normalized_merchant || rule.pattern}”?`,
+      detail:
+        "I movimenti già classificati resteranno invariati. La regola non verrà più applicata ai nuovi import.",
+      confirmLabel: "Elimina regola",
+      danger: true,
+      action: async () => {
+        await deleteMerchantRule(rule.id);
+        setRules((current) =>
+          current.filter((item) => item.id !== rule.id),
+        );
+        if (editingRule?.id === rule.id) setEditingRule(null);
+        setToast({ type: "success", message: "Regola eliminata" });
+      },
+    });
+  }
+
+  async function toggleRule(rule) {
+    try {
+      const saved = await updateMerchantRule(rule.id, { ...rule, active: !rule.active });
+      setRules((current) => current.map((item) => item.id === saved.id ? saved : item));
+    } catch (error) {
+      setToast({ type: "error", message: error.message || "Modifica non riuscita" });
+    }
+  }
+
   function exportBackup() {
     const blob = new Blob(
       [
@@ -1212,7 +1303,7 @@ function App() {
           <motion.main
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid gap-4 lg:grid-cols-3"
+            className="grid items-start gap-4 lg:grid-cols-3"
           >
             <div className="lg:col-span-3">
               <TaxonomyManager
@@ -1249,31 +1340,67 @@ function App() {
               status={`${rules.length} attive`}
               text="Gli esercenti già confermati vengono classificati automaticamente."
             />
-            <Panel
-              title="Regole di classificazione"
+            <div className="self-start">
+              <Panel
+                title="Regole di classificazione"
               subtitle="Create dalle tue conferme"
             >
               <div className="space-y-2">
-                {rules.map((r) => (
+                {(showAllRules ? rules : rules.slice(0, 6)).map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between rounded-xl bg-slate-50 p-3"
+                    className={`rounded-xl border p-3 ${r.active ? "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/55" : "border-dashed border-slate-300 bg-slate-50/40 opacity-65 dark:border-slate-700 dark:bg-slate-800/25"}`}
                   >
-                    <span>
-                      <b>{r.normalized_merchant}</b>
-                      <small className="block text-slate-400">
-                        contiene “{r.pattern}”
-                      </small>
-                    </span>
-                    <span className="rounded-full bg-white px-3 py-1 text-sm font-bold">
-                      {cat(r.category).icon} {r.category}
-                    </span>
+                    <div className="flex items-start gap-3">
+                      <span className="min-w-0 flex-1">
+                        <b className="block truncate">{r.normalized_merchant || r.pattern}</b>
+                        <small className="block truncate text-slate-400">contiene “{r.pattern}”</small>
+                        <small className="mt-1 block font-bold text-slate-500 dark:text-slate-300">
+                          {cat(r.category).icon} {r.category || "Nessuna categoria"} · {r.active ? "Attiva" : "Disattivata"}
+                        </small>
+                      </span>
+                      <div className="flex shrink-0 gap-1">
+                        <button type="button" onClick={() =>
+                          setEditingRule({
+                            ...r,
+                            microcategoryChoice:
+                              r.remember_microcategory && r.microcategory_id
+                                ? r.microcategory_id
+                                : "__omit__",
+                          })
+                        } className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-blue-600 dark:bg-slate-950 dark:text-slate-300" aria-label="Modifica regola"><Edit3 className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => toggleRule(r)} className="rounded-lg bg-white px-2.5 text-xs font-black text-slate-500 hover:text-emerald-600 dark:bg-slate-950 dark:text-slate-300">{r.active ? "OFF" : "ON"}</button>
+                        <button type="button" onClick={() => removeRule(r)} className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-rose-600 dark:bg-slate-950 dark:text-slate-300" aria-label="Elimina regola"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
                   </div>
                 ))}
+                {rules.length > 6 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllRules((current) => !current)}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-cyan-400/50 dark:hover:text-cyan-300"
+                    aria-expanded={showAllRules}
+                  >
+                    {showAllRules ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Mostra meno
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        Espandi tutte le regole ({rules.length})
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
-            </Panel>
-            <Panel
-              title="Budget mensili"
+              </Panel>
+            </div>
+            <div className="self-start">
+              <Panel
+                title="Budget mensili"
               subtitle="Imposta i limiti e salvali nel cloud"
             >
               <div className="space-y-3">
@@ -1312,9 +1439,11 @@ function App() {
                   {savingBudgets ? "Salvataggio" : "Salva budget"}
                 </Button>
               </div>
-            </Panel>
-            <Panel
-              title="Backup"
+              </Panel>
+            </div>
+            <div className="self-start">
+              <Panel
+                title="Backup"
               subtitle="Continua a proteggere i dati locali"
             >
               <Button
@@ -1325,7 +1454,8 @@ function App() {
                 <Download className="mr-2 h-4 w-4" />
                 Scarica backup JSON
               </Button>
-            </Panel>
+              </Panel>
+            </div>
             <Panel
               title="Stato connessione"
               subtitle="Nessun dato bancario reale"
@@ -1435,8 +1565,119 @@ function App() {
         </p>
       </Modal>
 
+      {editingRule && (
+      <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={() => setEditingRule(null)}>
+        <section className="w-full max-w-lg rounded-t-[2rem] bg-white p-5 shadow-2xl dark:bg-slate-900 sm:rounded-[2rem] sm:p-6" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="flex items-start justify-between gap-4">
+            <div><p className="text-xs font-black uppercase tracking-[.15em] text-blue-600 dark:text-cyan-400">Regola personale</p><h2 className="mt-2 text-2xl font-black">Modifica classificazione automatica</h2></div>
+            <button type="button" onClick={() => setEditingRule(null)} className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800"><X className="h-4 w-4" /></button>
+          </div>
+          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">La modifica vale per i movimenti importati in futuro. Quelli già classificati non vengono riscritti.</p>
+          <div className="mt-5 space-y-4">
+            <label className="block"><span className="mb-1.5 block text-sm font-bold">Testo da riconoscere</span><Input value={editingRule.pattern} onChange={(event) => setEditingRule({ ...editingRule, pattern: event.target.value })} className="rounded-xl" /></label>
+            <label className="block"><span className="mb-1.5 block text-sm font-bold">Nome esercente</span><Input value={editingRule.normalized_merchant || ""} onChange={(event) => setEditingRule({ ...editingRule, normalized_merchant: event.target.value })} className="rounded-xl" /></label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold">Categoria</span>
+              <select
+                value={editingRule.category_id || ""}
+                onChange={(event) => {
+                  const category = ruleTaxonomy.categories.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  setEditingRule({
+                    ...editingRule,
+                    category: category?.name || "",
+                    category_id: category?.id || null,
+                    subcategory_id: null,
+                    microcategory_id: null,
+                    microcategoryChoice: "__omit__",
+                    remember_microcategory: false,
+                  });
+                }}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950"
+              >
+                <option value="">Nessuna categoria</option>
+                {ruleTaxonomy.categories.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.icon || "•"} {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold">Sottocategoria</span>
+              <select
+                value={editingRule.subcategory_id || ""}
+                disabled={!editingRule.category_id}
+                onChange={(event) =>
+                  setEditingRule({
+                    ...editingRule,
+                    subcategory_id: event.target.value || null,
+                    microcategory_id: null,
+                    microcategoryChoice: "__omit__",
+                    remember_microcategory: false,
+                  })
+                }
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+              >
+                <option value="">Nessuna sottocategoria</option>
+                {ruleTaxonomy.subcategories
+                  .filter(
+                    (item) => item.category_id === editingRule.category_id,
+                  )
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.icon || "•"} {item.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold">Microcategoria</span>
+              <select
+                value={editingRule.microcategoryChoice || "__omit__"}
+                disabled={!editingRule.subcategory_id}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEditingRule({
+                    ...editingRule,
+                    microcategoryChoice: value,
+                    microcategory_id: value === "__omit__" ? null : value,
+                    remember_microcategory: value !== "__omit__",
+                  });
+                }}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+              >
+                <option value="__omit__">Non inserire</option>
+                {ruleTaxonomy.microcategories
+                  .filter(
+                    (item) =>
+                      !item.subcategory_id ||
+                      item.subcategory_id === editingRule.subcategory_id,
+                  )
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.icon || "•"} {item.name}
+                    </option>
+                  ))}
+              </select>
+              <small className="mt-1.5 block text-slate-400">
+                “Non inserire” applica categoria e sottocategoria ma lascia la
+                microcategoria vuota, quindi non viene conteggiata nei relativi grafici.
+              </small>
+            </label>
+            <label className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/55"><input type="checkbox" checked={editingRule.active} onChange={(event) => setEditingRule({ ...editingRule, active: event.target.checked })} /><span><b className="block text-sm">Regola attiva</b><small className="text-slate-400">Se disattivata, i nuovi movimenti non vengono classificati automaticamente.</small></span></label>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setEditingRule(null)} className="h-11 rounded-xl">Annulla</Button><Button onClick={saveEditedRule} disabled={savingRule} className="h-11 rounded-xl">{savingRule ? "Salvataggio..." : "Salva regola"}</Button></div>
+        </section>
+      </div>
+      )}
+
+
       <Modal open={!!reviewItem} onClose={() => setReviewItem(null)} wide>
-        {reviewItem && (
+      {reviewItem && (
           <TransactionDetailsEditor
             key={reviewItem.id}
             transaction={reviewItem}
