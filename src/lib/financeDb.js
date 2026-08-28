@@ -21,6 +21,11 @@ function fromTransactionRow(row) {
     raw_description: row.raw_description || "",
     normalized_merchant: row.normalized_merchant || "",
     category: row.category,
+    category_id: row.category_id,
+    subcategory_id: row.subcategory_id,
+    purpose_id: row.purpose_id,
+    notes: row.notes || "",
+    tag_ids: row.tag_ids || [],
     suggested_category: row.suggested_category,
     confidence: row.confidence === null ? null : Number(row.confidence),
     review_status: row.review_status,
@@ -43,6 +48,11 @@ function toTransactionRow(transaction, userId) {
       transaction.raw_description || transaction.description || "",
     normalized_merchant: transaction.normalized_merchant || null,
     category: transaction.category || null,
+    category_id: transaction.categoryId || transaction.category_id || null,
+    subcategory_id:
+      transaction.subcategoryId || transaction.subcategory_id || null,
+    purpose_id: transaction.purposeId || transaction.purpose_id || null,
+    notes: transaction.notes || null,
     suggested_category: transaction.suggested_category || null,
     confidence:
       transaction.confidence == null ? null : Number(transaction.confidence),
@@ -83,13 +93,37 @@ export async function loadFinanceData() {
     accountsResult.error,
   ].find(Boolean);
   if (error) throw error;
+
+  const transactionRows = transactionsResult.data || [];
+  const transactionIds = transactionRows.map((row) => row.id);
+  const tagMap = new Map();
+
+  if (transactionIds.length > 0) {
+    const { data: tagLinks, error: tagError } = await supabase
+      .from("transaction_tags")
+      .select("transaction_id, tag_id")
+      .in("transaction_id", transactionIds);
+    if (tagError) throw tagError;
+    for (const link of tagLinks || []) {
+      const current = tagMap.get(link.transaction_id) || [];
+      current.push(link.tag_id);
+      tagMap.set(link.transaction_id, current);
+    }
+  }
+
   return {
-    transactions: (transactionsResult.data || []).map(fromTransactionRow),
+    transactions: transactionRows.map((row) =>
+      fromTransactionRow({ ...row, tag_ids: tagMap.get(row.id) || [] }),
+    ),
     rules: (rulesResult.data || []).map((row) => ({
       id: row.id,
       pattern: row.pattern,
       normalized_merchant: row.normalized_merchant || "",
       category: row.category,
+      category_id: row.category_id,
+      subcategory_id: row.subcategory_id,
+      purpose_id: row.purpose_id,
+      remember_purpose: row.remember_purpose,
       active: row.active,
     })),
     budgets: Object.fromEntries(
@@ -130,6 +164,13 @@ export async function updateTransaction(transactionId, changes) {
     raw_description: "raw_description",
     normalized_merchant: "normalized_merchant",
     category: "category",
+    categoryId: "category_id",
+    category_id: "category_id",
+    subcategoryId: "subcategory_id",
+    subcategory_id: "subcategory_id",
+    purposeId: "purpose_id",
+    purpose_id: "purpose_id",
+    notes: "notes",
     suggested_category: "suggested_category",
     confidence: "confidence",
     review_status: "review_status",
@@ -170,6 +211,12 @@ export async function upsertMerchantRule(rule) {
         pattern: rule.pattern,
         normalized_merchant: rule.normalized_merchant || null,
         category: rule.category,
+        category_id: rule.categoryId || rule.category_id || null,
+        subcategory_id: rule.subcategoryId || rule.subcategory_id || null,
+        purpose_id: rule.rememberPurpose
+          ? rule.purposeId || rule.purpose_id || null
+          : null,
+        remember_purpose: Boolean(rule.rememberPurpose),
         active: rule.active !== false,
       },
       { onConflict: "user_id,pattern" },
@@ -182,6 +229,10 @@ export async function upsertMerchantRule(rule) {
     pattern: data.pattern,
     normalized_merchant: data.normalized_merchant || "",
     category: data.category,
+    category_id: data.category_id,
+    subcategory_id: data.subcategory_id,
+    purpose_id: data.purpose_id,
+    remember_purpose: data.remember_purpose,
     active: data.active,
   };
 }
@@ -207,4 +258,28 @@ export async function saveBudgets(budgets) {
   return Object.fromEntries(
     rows.map((row) => [row.category, row.monthly_limit]),
   );
+}
+
+export async function setTransactionTags(transactionId, tagIds = []) {
+  const user = await getCurrentUser();
+  const { error: deleteError } = await supabase
+    .from("transaction_tags")
+    .delete()
+    .eq("transaction_id", transactionId);
+  if (deleteError) throw deleteError;
+
+  const uniqueIds = [...new Set(tagIds.filter(Boolean))];
+  if (uniqueIds.length > 0) {
+    const { error: insertError } = await supabase
+      .from("transaction_tags")
+      .insert(
+        uniqueIds.map((tagId) => ({
+          transaction_id: transactionId,
+          tag_id: tagId,
+          user_id: user.id,
+        })),
+      );
+    if (insertError) throw insertError;
+  }
+  return uniqueIds;
 }

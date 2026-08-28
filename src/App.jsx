@@ -48,12 +48,15 @@ import {
   deleteTransaction,
   loadFinanceData,
   saveBudgets,
+  setTransactionTags,
   updateTransaction,
   upsertMerchantRule,
 } from "@/lib/financeDb";
 import CsvImporter from "@/components/CsvImporter";
 import { importCsvTransactions } from "@/lib/csvFinanceDb";
 import TaxonomyManager from "@/components/taxonomy/TaxonomyManager";
+import TransactionDetailsEditor from "@/components/transactions/TransactionDetailsEditor";
+import OverviewDashboard from "@/components/dashboard/OverviewDashboard";
 
 /*
   ARCHITETTURA PRONTA PER SUPABASE E OPEN BANKING
@@ -796,6 +799,134 @@ function App() {
     }
   }
 
+  async function saveDetailedMovement(details) {
+    setSavingMovement(true);
+    try {
+      const baseChanges = {
+        type: details.type,
+        amount: details.amount,
+        date: details.date,
+        description: details.description,
+        normalized_merchant: details.description,
+        category: details.category,
+        categoryId: details.categoryId,
+        subcategoryId: details.subcategoryId || null,
+        purposeId: details.purposeId || null,
+        notes: details.notes || null,
+        recurring: details.recurring,
+      };
+
+      if (editingId) {
+        const updated = await updateTransaction(editingId, baseChanges);
+        const tagIds = await setTransactionTags(editingId, details.tagIds);
+        setTransactions((previous) =>
+          previous.map((item) =>
+            item.id === updated.id ? { ...updated, tag_ids: tagIds } : item,
+          ),
+        );
+        setToast({
+          type: "success",
+          message: "Movimento aggiornato con tutti i dettagli",
+        });
+      } else {
+        const created = await createTransaction({
+          ...baseChanges,
+          raw_description: details.description,
+          review_status: "verified",
+          confidence: 1,
+          source: "manual",
+          bank_status: "booked",
+        });
+        const tagIds = await setTransactionTags(created.id, details.tagIds);
+        setTransactions((previous) => [
+          { ...created, tag_ids: tagIds },
+          ...previous,
+        ]);
+        setToast({ type: "success", message: "Movimento aggiunto" });
+      }
+
+      setTxModal(false);
+      setEditingId(null);
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error.message || "Salvataggio non riuscito",
+      });
+    } finally {
+      setSavingMovement(false);
+    }
+  }
+
+  async function saveDetailedReview(details) {
+    if (!reviewItem) return;
+    setSavingMovement(true);
+    try {
+      const updated = await updateTransaction(reviewItem.id, {
+        type: details.type,
+        amount: details.amount,
+        date: details.date,
+        description: details.description,
+        normalized_merchant: details.description,
+        category: details.category,
+        categoryId: details.categoryId,
+        subcategoryId: details.subcategoryId || null,
+        purposeId: details.purposeId || null,
+        notes: details.notes || null,
+        suggested_category: null,
+        confidence: 1,
+        review_status: "verified",
+      });
+      const tagIds = await setTransactionTags(reviewItem.id, details.tagIds);
+      const complete = { ...updated, tag_ids: tagIds };
+      setTransactions((previous) =>
+        previous.map((item) => (item.id === complete.id ? complete : item)),
+      );
+
+      const pattern = extractMerchantPattern(
+        reviewItem.raw_description || reviewItem.description,
+      );
+      if (
+        details.remember &&
+        pattern.length >= 3 &&
+        details.description.length >= 3
+      ) {
+        const savedRule = await upsertMerchantRule({
+          pattern,
+          normalized_merchant: details.description,
+          category: details.category,
+          categoryId: details.categoryId,
+          subcategoryId: details.subcategoryId || null,
+          purposeId: details.purposeId || null,
+          rememberPurpose: details.rememberPurpose,
+          active: true,
+        });
+        setRules((previous) => {
+          const found = previous.some(
+            (rule) => rule.pattern.toUpperCase() === pattern,
+          );
+          return found
+            ? previous.map((rule) =>
+                rule.pattern.toUpperCase() === pattern ? savedRule : rule,
+              )
+            : [...previous, savedRule];
+        });
+      }
+
+      setReviewItem(null);
+      setToast({
+        type: "success",
+        message: "Transazione classificata in dettaglio",
+      });
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error.message || "Classificazione non riuscita",
+      });
+    } finally {
+      setSavingMovement(false);
+    }
+  }
+
   async function handleCsvImport(csvTransactions) {
     const result = await importCsvTransactions(csvTransactions);
 
@@ -958,124 +1089,14 @@ function App() {
         </div>
 
         {tab === "dashboard" && (
-          <motion.main
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat
-                title="Entrate"
-                value={euro.format(income)}
-                icon={ArrowUpRight}
-                color="emerald"
-              />
-              <Stat
-                title="Spese"
-                value={euro.format(expenses)}
-                icon={ArrowDownRight}
-                color="rose"
-              />
-              <Stat
-                title="Risparmio"
-                value={euro.format(balance)}
-                icon={Wallet}
-                color="blue"
-              />
-              <Stat
-                title="Da classificare"
-                value={euro.format(
-                  monthPending.reduce((s, t) => s + Number(t.amount), 0),
-                )}
-                subtitle={`${monthPending.length} operazioni`}
-                icon={Inbox}
-                color="orange"
-                action={() => setTab("inbox")}
-              />
-            </section>
-            <section className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_.8fr]">
-              <Panel title="Ultimi 6 mesi" subtitle="Entrate e spese">
-                <div className="h-72">
-                  <ResponsiveContainer>
-                    <AreaChart data={trend}>
-                      <CartesianGrid
-                        vertical={false}
-                        strokeDasharray="3 3"
-                        opacity={0.15}
-                      />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                      <YAxis hide />
-                      <Tooltip
-                        formatter={(v) => euro.format(v)}
-                        contentStyle={{ borderRadius: 16, border: "none" }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="Entrate"
-                        stroke="#10b981"
-                        fill="#10b98120"
-                        strokeWidth={3}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="Spese"
-                        stroke="#f43f5e"
-                        fill="#f43f5e18"
-                        strokeWidth={3}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </Panel>
-              <Panel title="Dove spendi" subtitle="Il limbo resta separato">
-                <div className="h-48">
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        dataKey="value"
-                        innerRadius={50}
-                        outerRadius={78}
-                        paddingAngle={3}
-                      >
-                        {categoryData.map((x) => (
-                          <Cell key={x.name} fill={x.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v) => euro.format(v)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="space-y-2">
-                  {categoryData.slice(0, 5).map((x) => (
-                    <div key={x.name} className="flex justify-between text-sm">
-                      <span>
-                        {x.icon} {x.name}
-                      </span>
-                      <b>{euro.format(x.value)}</b>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-            </section>
-            {pending.length > 0 && (
-              <button
-                onClick={() => setTab("inbox")}
-                className="mt-4 flex w-full items-center justify-between rounded-3xl bg-gradient-to-r from-orange-500 to-amber-400 p-5 text-left text-white shadow-lg"
-              >
-                <span>
-                  <span className="block text-xs font-bold uppercase opacity-80">
-                    Richiede attenzione
-                  </span>
-                  <b className="text-lg">
-                    Hai {pending.length} transazioni da classificare
-                  </b>
-                </span>
-                <Inbox />
-              </button>
-            )}
-          </motion.main>
+          <OverviewDashboard
+            transactions={transactions}
+            budgets={budgets}
+            month={month}
+            onOpenInbox={() => setTab("inbox")}
+            onEditTransaction={openEditMovement}
+          />
         )}
-
         {tab === "inbox" && (
           <motion.main
             initial={{ opacity: 0, y: 8 }}
@@ -1318,79 +1339,30 @@ function App() {
         )}
       </div>
 
-      <Modal open={txModal} onClose={() => setTxModal(false)}>
-        <ModalHead
-          title={editingId ? "Modifica movimento" : "Nuovo movimento"}
-          close={() => {
+      <Modal
+        open={txModal}
+        onClose={() => {
+          setTxModal(false);
+          setEditingId(null);
+        }}
+        wide
+      >
+        <TransactionDetailsEditor
+          key={editingId || "new-movement"}
+          transaction={
+            editingId
+              ? transactions.find((item) => item.id === editingId)
+              : { type: "expense", date: today(), recurring: false }
+          }
+          mode="edit"
+          saving={savingMovement}
+          onCancel={() => {
             setTxModal(false);
             setEditingId(null);
           }}
+          onSave={saveDetailedMovement}
         />
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
-            {[
-              ["expense", "Spesa"],
-              ["income", "Entrata"],
-            ].map(([v, l]) => (
-              <button
-                key={v}
-                onClick={() =>
-                  setForm({
-                    ...form,
-                    type: v,
-                    category: v === "income" ? "Stipendio" : "Alimentari",
-                  })
-                }
-                className={`rounded-lg py-2 font-bold ${form.type === v ? "bg-slate-950 text-white" : ""}`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-          <Input
-            inputMode="decimal"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            placeholder="Importo in euro"
-            className="h-12 rounded-xl"
-          />
-          <Input
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Descrizione"
-            className="h-12 rounded-xl"
-          />
-          <Input
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            className="h-12 rounded-xl"
-          />
-          {form.type === "expense" && (
-            <select
-              className="h-12 w-full rounded-xl border px-3"
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.name}>{c.name}</option>
-              ))}
-            </select>
-          )}
-          <Button
-            className="h-12 w-full rounded-xl bg-slate-950"
-            onClick={saveManual}
-            disabled={savingMovement}
-          >
-            {savingMovement
-              ? "Salvataggio"
-              : editingId
-                ? "Salva modifiche"
-                : "Aggiungi"}
-          </Button>
-        </div>
       </Modal>
-
       <Modal open={csvModal} onClose={() => setCsvModal(false)} wide>
         <CsvImporter
           rules={rules}
@@ -1444,12 +1416,17 @@ function App() {
         </p>
       </Modal>
 
-      <Modal open={!!reviewItem} onClose={() => setReviewItem(null)}>
-        <ModalHead
-          title="Classifica transazione"
-          close={() => setReviewItem(null)}
-        />
-        {reviewItem && <Review tx={reviewItem} onPick={assignCategory} />}
+      <Modal open={!!reviewItem} onClose={() => setReviewItem(null)} wide>
+        {reviewItem && (
+          <TransactionDetailsEditor
+            key={reviewItem.id}
+            transaction={reviewItem}
+            mode="review"
+            saving={savingMovement}
+            onCancel={() => setReviewItem(null)}
+            onSave={saveDetailedReview}
+          />
+        )}
       </Modal>
       <Modal
         open={!!confirmDialog}
@@ -1724,9 +1701,15 @@ function TxRow({ t, onReview, onEdit, onDelete }) {
       <div className="min-w-0 flex-1">
         <b className="block truncate">{t.description}</b>
         <span className="text-xs text-slate-400">
-          {t.category || "Da classificare"} ·{" "}
-          {t.source === "bank" ? "Banca" : "Manuale"} ·{" "}
-          {t.bank_status === "pending" ? "In sospeso" : "Contabilizzata"}
+          {t.category || "Da classificare"}
+          {t.subcategory_id ? " · Dettaglio assegnato" : ""}
+          {t.purpose_id ? " · Finalità assegnata" : ""} ·{" "}
+          {t.source === "csv"
+            ? "CSV"
+            : t.source === "bank"
+              ? "Banca"
+              : "Manuale"}{" "}
+          · {t.bank_status === "pending" ? "In sospeso" : "Contabilizzata"}
         </span>
       </div>
       <b className={t.type === "income" ? "text-emerald-600" : "text-rose-600"}>
