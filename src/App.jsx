@@ -270,6 +270,19 @@ function classify(raw, rules) {
     raw.raw_description || raw.description || "",
   ).toUpperCase();
 
+  if (/KLARNA/i.test(originalText)) {
+    return {
+      normalized_merchant:
+        raw.normalized_merchant || raw.description || "Klarna",
+      category: null,
+      category_id: null,
+      subcategory_id: null,
+      microcategory_id: null,
+      suggested_category: null,
+      confidence: 0,
+      review_status: "needs_review",
+    };
+  }
   const personalRule = rules.find((rule) => {
     return rule.active && originalText.includes(rule.pattern.toUpperCase());
   });
@@ -279,6 +292,11 @@ function classify(raw, rules) {
       description: personalRule.normalized_merchant || raw.description,
       normalized_merchant: personalRule.normalized_merchant || "",
       category: personalRule.category,
+      category_id: personalRule.category_id || null,
+      subcategory_id: personalRule.subcategory_id || null,
+      microcategory_id: personalRule.remember_microcategory
+        ? personalRule.microcategory_id || null
+        : null,
       suggested_category: null,
       confidence: 1,
       review_status: "verified",
@@ -811,7 +829,7 @@ function App() {
         category: details.category,
         categoryId: details.categoryId,
         subcategoryId: details.subcategoryId || null,
-        purposeId: details.purposeId || null,
+        microcategoryId: details.microcategoryId || null,
         notes: details.notes || null,
         recurring: details.recurring,
       };
@@ -870,7 +888,7 @@ function App() {
         category: details.category,
         categoryId: details.categoryId,
         subcategoryId: details.subcategoryId || null,
-        purposeId: details.purposeId || null,
+        microcategoryId: details.microcategoryId || null,
         notes: details.notes || null,
         suggested_category: null,
         confidence: 1,
@@ -896,8 +914,8 @@ function App() {
           category: details.category,
           categoryId: details.categoryId,
           subcategoryId: details.subcategoryId || null,
-          purposeId: details.purposeId || null,
-          rememberPurpose: details.rememberPurpose,
+          microcategoryId: details.microcategoryId || null,
+          rememberMicrocategory: details.rememberMicrocategory,
           active: true,
         });
         setRules((previous) => {
@@ -1703,7 +1721,7 @@ function TxRow({ t, onReview, onEdit, onDelete }) {
         <span className="text-xs text-slate-400">
           {t.category || "Da classificare"}
           {t.subcategory_id ? " · Dettaglio assegnato" : ""}
-          {t.purpose_id ? " · Finalità assegnata" : ""} ·{" "}
+          {t.microcategory_id ? " · Microcategoria assegnata" : ""} ·{" "}
           {t.source === "csv"
             ? "CSV"
             : t.source === "bank"

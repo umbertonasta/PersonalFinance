@@ -12,7 +12,7 @@ import {
   Plus,
   RotateCcw,
   Tag,
-  Target,
+  Layers3,
   Trash2,
   X,
 } from "lucide-react";
@@ -20,14 +20,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createCategory,
-  createPurpose,
+  createMicrocategory,
   createSubcategory,
   createTag,
   deleteTaxonomyItem,
   getTaxonomyUsage,
   loadTaxonomy,
   updateCategory,
-  updatePurpose,
+  updateMicrocategory,
   updateSubcategory,
   updateTag,
 } from "@/lib/taxonomyDb";
@@ -45,7 +45,12 @@ const TABS = [
     singular: "sottocategoria",
     icon: ChevronDown,
   },
-  { id: "purposes", label: "Finalita", singular: "finalita", icon: Target },
+  {
+    id: "microcategories",
+    label: "Microcategorie",
+    singular: "microcategoria",
+    icon: Layers3,
+  },
   { id: "tags", label: "Etichette", singular: "etichetta", icon: Tag },
 ];
 
@@ -54,6 +59,7 @@ const DEFAULT_FORM = {
   icon: "",
   color: "#64748b",
   categoryId: "",
+  subcategoryId: "",
   categoryType: "expense",
 };
 
@@ -61,11 +67,12 @@ export default function TaxonomyManager({ onChanged }) {
   const [taxonomy, setTaxonomy] = useState({
     categories: [],
     subcategories: [],
-    purposes: [],
+    microcategories: [],
     tags: [],
   });
   const [activeTab, setActiveTab] = useState("categories");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [showHidden, setShowHidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState(null);
@@ -105,12 +112,18 @@ export default function TaxonomyManager({ onChanged }) {
       items = items.filter((item) => item.category_id === selectedCategory);
     }
 
+    if (activeTab === "microcategories" && selectedSubcategory) {
+      items = items.filter(
+        (item) =>
+          !item.subcategory_id || item.subcategory_id === selectedSubcategory,
+      );
+    }
     if (!showHidden) {
       items = items.filter((item) => !item.is_hidden);
     }
 
     return items;
-  }, [taxonomy, activeTab, selectedCategory, showHidden]);
+  }, [taxonomy, activeTab, selectedCategory, selectedSubcategory, showHidden]);
 
   const categoryMap = useMemo(
     () =>
@@ -141,6 +154,7 @@ export default function TaxonomyManager({ onChanged }) {
         icon: item.icon || "",
         color: item.color || "#64748b",
         categoryId: item.category_id || selectedCategory || "",
+        subcategoryId: item.subcategory_id || selectedSubcategory || "",
         categoryType: item.category_type || "expense",
       },
     });
@@ -197,15 +211,17 @@ export default function TaxonomyManager({ onChanged }) {
         }
       }
 
-      if (activeTab === "purposes") {
+      if (activeTab === "microcategories") {
         if (mode === "create") {
-          await createPurpose({
+          await createMicrocategory({
+            subcategoryId: form.subcategoryId || null,
             name: form.name,
             icon: form.icon || null,
             color: form.color || null,
           });
         } else {
-          await updatePurpose(item.id, {
+          await updateMicrocategory(item.id, {
+            subcategoryId: form.subcategoryId || null,
             name: form.name,
             icon: form.icon || null,
             color: form.color || null,
@@ -242,7 +258,8 @@ export default function TaxonomyManager({ onChanged }) {
       if (activeTab === "categories") await updateCategory(item.id, changes);
       if (activeTab === "subcategories")
         await updateSubcategory(item.id, changes);
-      if (activeTab === "purposes") await updatePurpose(item.id, changes);
+      if (activeTab === "microcategories")
+        await updateMicrocategory(item.id, changes);
       if (activeTab === "tags") await updateTag(item.id, changes);
 
       setMessage({
@@ -448,6 +465,7 @@ export default function TaxonomyManager({ onChanged }) {
             activeTab={activeTab}
             form={editor.form}
             categories={taxonomy.categories}
+            subcategories={taxonomy.subcategories}
             onChange={(changes) =>
               setEditor((current) => ({
                 ...current,
@@ -610,7 +628,13 @@ function TaxonomyRow({
   );
 }
 
-function EditorFields({ activeTab, form, categories, onChange }) {
+function EditorFields({
+  activeTab,
+  form,
+  categories,
+  subcategories,
+  onChange,
+}) {
   return (
     <div className="mt-6 space-y-4">
       {activeTab === "subcategories" && (
@@ -763,7 +787,7 @@ function typeForTab(tab) {
   return {
     categories: "category",
     subcategories: "subcategory",
-    purposes: "purpose",
+    microcategories: "microcategory",
     tags: "tag",
   }[tab];
 }

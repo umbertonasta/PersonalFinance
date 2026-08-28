@@ -113,6 +113,9 @@ function suggestCategory(name, description, type) {
 
 function classifyTransaction(transaction, rules) {
   const searchableText = `${transaction.name} ${transaction.raw_description}`;
+  if (/KLARNA/i.test(searchableText)) {
+    return { ...transaction, category: null, category_id: null, subcategory_id: null, microcategory_id: null, suggested_category: null, confidence: 0, review_status: "needs_review" };
+  }
   const personalRule = findRule(searchableText, rules);
 
   if (personalRule) {
@@ -121,6 +124,9 @@ function classifyTransaction(transaction, rules) {
       description: personalRule.normalized_merchant || transaction.name,
       normalized_merchant: personalRule.normalized_merchant || transaction.name,
       category: personalRule.category,
+      category_id: personalRule.category_id || null,
+      subcategory_id: personalRule.subcategory_id || null,
+      microcategory_id: personalRule.remember_microcategory ? personalRule.microcategory_id || null : null,
       suggested_category: null,
       confidence: 1,
       review_status: "verified",

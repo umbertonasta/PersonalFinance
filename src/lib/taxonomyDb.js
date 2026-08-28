@@ -47,8 +47,8 @@ export async function loadTaxonomy({ includeHidden = true } = {}) {
     .order("sort_order")
     .order("name");
 
-  let purposesQuery = supabase
-    .from("purposes")
+  let microcategoriesQuery = supabase
+    .from("microcategories")
     .select("*")
     .order("sort_order")
     .order("name");
@@ -61,21 +61,21 @@ export async function loadTaxonomy({ includeHidden = true } = {}) {
   if (!includeHidden) {
     categoriesQuery = categoriesQuery.eq("is_hidden", false);
     subcategoriesQuery = subcategoriesQuery.eq("is_hidden", false);
-    purposesQuery = purposesQuery.eq("is_hidden", false);
+    microcategoriesQuery = microcategoriesQuery.eq("is_hidden", false);
     tagsQuery = tagsQuery.eq("is_hidden", false);
   }
 
-  const [categories, subcategories, purposes, tags] = await Promise.all([
+  const [categories, subcategories, microcategories, tags] = await Promise.all([
     throwIfError(await categoriesQuery),
     throwIfError(await subcategoriesQuery),
-    throwIfError(await purposesQuery),
+    throwIfError(await microcategoriesQuery),
     throwIfError(await tagsQuery),
   ]);
 
   return {
     categories: categories || [],
     subcategories: subcategories || [],
-    purposes: purposes || [],
+    microcategories: microcategories || [],
     tags: tags || [],
   };
 }
@@ -233,7 +233,8 @@ export async function updateSubcategory(subcategoryId, changes) {
   return data;
 }
 
-export async function createPurpose({
+export async function createMicrocategory({
+  subcategoryId = null,
   name,
   icon = null,
   color = null,
@@ -241,15 +242,16 @@ export async function createPurpose({
   const user = await getCurrentUser();
 
   const { count, error: countError } = await supabase
-    .from("purposes")
+    .from("microcategories")
     .select("id", { count: "exact", head: true });
 
   if (countError) throw countError;
 
   const { data, error } = await supabase
-    .from("purposes")
+    .from("microcategories")
     .insert({
       user_id: user.id,
+      subcategory_id: subcategoryId,
       name: cleanName(name),
       icon: icon ? String(icon).trim() : null,
       color: color ? normalizeColor(color) : null,
@@ -263,8 +265,9 @@ export async function createPurpose({
   return data;
 }
 
-export async function updatePurpose(purposeId, changes) {
+export async function updateMicrocategory(microcategoryId, changes) {
   const databaseChanges = {};
+  if ("subcategoryId" in changes) databaseChanges.subcategory_id = changes.subcategoryId || null;
 
   if ("name" in changes) databaseChanges.name = cleanName(changes.name);
   if ("icon" in changes) {
@@ -283,9 +286,9 @@ export async function updatePurpose(purposeId, changes) {
   }
 
   const { data, error } = await supabase
-    .from("purposes")
+    .from("microcategories")
     .update(databaseChanges)
-    .eq("id", purposeId)
+    .eq("id", microcategoryId)
     .select("*")
     .single();
 
@@ -362,8 +365,8 @@ export async function getTaxonomyUsage(type, itemId) {
     };
   }
 
-  if (type === "subcategory" || type === "purpose") {
-    const column = type === "subcategory" ? "subcategory_id" : "purpose_id";
+  if (type === "subcategory" || type === "microcategory") {
+    const column = type === "subcategory" ? "subcategory_id" : "microcategory_id";
     const [transactions, rules] = await Promise.all([
       supabase
         .from("transactions")
@@ -416,7 +419,7 @@ export async function deleteTaxonomyItem(type, itemId) {
   const tableMap = {
     category: "categories",
     subcategory: "subcategories",
-    purpose: "purposes",
+    microcategory: "microcategories",
     tag: "tags",
   };
 
@@ -472,27 +475,27 @@ export async function mergeSubcategories(sourceId, destinationId) {
   return true;
 }
 
-export async function mergePurposes(sourceId, destinationId) {
+export async function mergeMicrocategories(sourceId, destinationId) {
   if (sourceId === destinationId) {
     throw new Error("Scegli una finalità diversa.");
   }
 
   const { error: transactionError } = await supabase
     .from("transactions")
-    .update({ purpose_id: destinationId })
-    .eq("purpose_id", sourceId);
+    .update({ microcategory_id: destinationId })
+    .eq("microcategory_id", sourceId);
 
   if (transactionError) throw transactionError;
 
   const { error: ruleError } = await supabase
     .from("merchant_rules")
-    .update({ purpose_id: destinationId })
-    .eq("purpose_id", sourceId);
+    .update({ microcategory_id: destinationId })
+    .eq("microcategory_id", sourceId);
 
   if (ruleError) throw ruleError;
 
   const { error: deleteError } = await supabase
-    .from("purposes")
+    .from("microcategories")
     .delete()
     .eq("id", sourceId);
 

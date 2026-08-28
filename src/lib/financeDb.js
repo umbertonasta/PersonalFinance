@@ -23,7 +23,7 @@ function fromTransactionRow(row) {
     category: row.category,
     category_id: row.category_id,
     subcategory_id: row.subcategory_id,
-    purpose_id: row.purpose_id,
+    microcategory_id: row.microcategory_id,
     notes: row.notes || "",
     tag_ids: row.tag_ids || [],
     suggested_category: row.suggested_category,
@@ -51,7 +51,7 @@ function toTransactionRow(transaction, userId) {
     category_id: transaction.categoryId || transaction.category_id || null,
     subcategory_id:
       transaction.subcategoryId || transaction.subcategory_id || null,
-    purpose_id: transaction.purposeId || transaction.purpose_id || null,
+    microcategory_id: transaction.microcategoryId || transaction.microcategory_id || null,
     notes: transaction.notes || null,
     suggested_category: transaction.suggested_category || null,
     confidence:
@@ -122,8 +122,8 @@ export async function loadFinanceData() {
       category: row.category,
       category_id: row.category_id,
       subcategory_id: row.subcategory_id,
-      purpose_id: row.purpose_id,
-      remember_purpose: row.remember_purpose,
+      microcategory_id: row.microcategory_id,
+      remember_microcategory: row.remember_microcategory,
       active: row.active,
     })),
     budgets: Object.fromEntries(
@@ -168,8 +168,8 @@ export async function updateTransaction(transactionId, changes) {
     category_id: "category_id",
     subcategoryId: "subcategory_id",
     subcategory_id: "subcategory_id",
-    purposeId: "purpose_id",
-    purpose_id: "purpose_id",
+    microcategoryId: "microcategory_id",
+    microcategory_id: "microcategory_id",
     notes: "notes",
     suggested_category: "suggested_category",
     confidence: "confidence",
@@ -213,10 +213,10 @@ export async function upsertMerchantRule(rule) {
         category: rule.category,
         category_id: rule.categoryId || rule.category_id || null,
         subcategory_id: rule.subcategoryId || rule.subcategory_id || null,
-        purpose_id: rule.rememberPurpose
-          ? rule.purposeId || rule.purpose_id || null
+        microcategory_id: rule.rememberMicrocategory
+          ? rule.microcategoryId || rule.microcategory_id || null
           : null,
-        remember_purpose: Boolean(rule.rememberPurpose),
+        remember_microcategory: Boolean(rule.rememberMicrocategory),
         active: rule.active !== false,
       },
       { onConflict: "user_id,pattern" },
@@ -231,8 +231,8 @@ export async function upsertMerchantRule(rule) {
     category: data.category,
     category_id: data.category_id,
     subcategory_id: data.subcategory_id,
-    purpose_id: data.purpose_id,
-    remember_purpose: data.remember_purpose,
+    microcategory_id: data.microcategory_id,
+    remember_microcategory: data.remember_microcategory,
     active: data.active,
   };
 }

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createCategory,
-  createPurpose,
+  createMicrocategory,
   createSubcategory,
   createTag,
   loadTaxonomy,
@@ -31,7 +31,7 @@ export default function TransactionDetailsEditor({
   const [taxonomy, setTaxonomy] = useState({
     categories: [],
     subcategories: [],
-    purposes: [],
+    microcategories: [],
     tags: [],
   });
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function TransactionDetailsEditor({
   const [remember, setRemember] = useState(
     Boolean(transaction?.normalized_merchant),
   );
-  const [rememberPurpose, setRememberPurpose] = useState(false);
+  const [rememberMicrocategory, setRememberMicrocategory] = useState(false);
   const [showGuide, setShowGuide] = useState(
     () => localStorage.getItem("finance-classification-guide-seen") !== "true",
   );
@@ -54,7 +54,7 @@ export default function TransactionDetailsEditor({
     description: transaction?.description || "",
     categoryId: transaction?.category_id || "",
     subcategoryId: transaction?.subcategory_id || "",
-    purposeId: transaction?.purpose_id || "",
+    microcategoryId: transaction?.microcategory_id || "",
     tagIds: transaction?.tag_ids || [],
     notes: transaction?.notes || "",
     recurring: Boolean(transaction?.recurring),
@@ -96,6 +96,14 @@ export default function TransactionDetailsEditor({
       ),
     [taxonomy.subcategories, form.categoryId],
   );
+  const availableMicrocategories = useMemo(
+    () =>
+      taxonomy.microcategories.filter(
+        (item) =>
+          !item.subcategory_id || item.subcategory_id === form.subcategoryId,
+      ),
+    [taxonomy.microcategories, form.subcategoryId],
+  );
   const selectedCategory = taxonomy.categories.find(
     (item) => item.id === form.categoryId,
   );
@@ -128,14 +136,15 @@ export default function TransactionDetailsEditor({
         await refreshTaxonomy();
         update({ subcategoryId: created.id });
       }
-      if (quick.type === "purpose") {
-        const created = await createPurpose({
+      if (quick.type === "microcategory") {
+        const created = await createMicrocategory({
+          subcategoryId: form.subcategoryId,
           name: quick.name,
           icon: quick.icon || null,
           color: quick.color,
         });
         await refreshTaxonomy();
-        update({ purposeId: created.id });
+        update({ microcategoryId: created.id });
       }
       if (quick.type === "tag") {
         const created = await createTag({
@@ -167,7 +176,7 @@ export default function TransactionDetailsEditor({
       description: form.description.trim(),
       category: selectedCategory?.name || null,
       remember,
-      rememberPurpose,
+      rememberMicrocategory,
     });
   }
 
@@ -237,7 +246,7 @@ export default function TransactionDetailsEditor({
               example="Benzina, Treno, Aereo"
             />
             <GuideItem
-              title="Finalità o contesto"
+              title="Microcategoria"
               question="Per quale motivo hai sostenuto la spesa?"
               example="Viaggio, Lavoro, Regalo"
             />
@@ -320,7 +329,11 @@ export default function TransactionDetailsEditor({
             placeholder="Seleziona l’area generale"
             value={form.categoryId}
             onChange={(value) =>
-              update({ categoryId: value, subcategoryId: "" })
+              update({
+                categoryId: value,
+                subcategoryId: "",
+                microcategoryId: "",
+              })
             }
             items={availableCategories}
             onAdd={() =>
@@ -333,7 +346,9 @@ export default function TransactionDetailsEditor({
             examples={subcategoryExamples(selectedCategory?.name)}
             placeholder="Seleziona il tipo preciso"
             value={form.subcategoryId}
-            onChange={(value) => update({ subcategoryId: value })}
+            onChange={(value) =>
+              update({ subcategoryId: value, microcategoryId: "" })
+            }
             items={availableSubcategories}
             disabled={!form.categoryId}
             optional
@@ -359,7 +374,7 @@ export default function TransactionDetailsEditor({
                 Aggiungi contesto e altri dettagli
               </strong>
               <span className="mt-1 block text-xs text-slate-400">
-                Finalità, etichette e note sono facoltative.
+                Microcategoria, etichette e note sono facoltative.
               </span>
             </span>
             {showAdvanced ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -368,15 +383,16 @@ export default function TransactionDetailsEditor({
           {showAdvanced && (
             <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50/45 p-4 dark:border-slate-700 dark:bg-slate-800/25">
               <Picker
-                label="Finalità o contesto"
-                question="Per quale motivo hai sostenuto questa spesa?"
-                examples="Viaggio, Lavoro, Regalo, Famiglia, Progetto personale"
-                placeholder="Nessuna finalità particolare"
-                value={form.purposeId}
-                onChange={(value) => update({ purposeId: value })}
-                items={taxonomy.purposes}
+                label="Microcategoria"
+                question="Che cosa hai acquistato o pagato nello specifico?"
+                examples="Cura personale, Elettronica, Benzina, Abbigliamento"
+                placeholder="Nessuna microcategoria"
+                value={form.microcategoryId}
+                onChange={(value) => update({ microcategoryId: value })}
+                items={availableMicrocategories}
+                disabled={!form.subcategoryId}
                 optional
-                onAdd={() => setQuick({ ...emptyQuick, type: "purpose" })}
+                onAdd={() => setQuick({ ...emptyQuick, type: "microcategory" })}
               />
 
               <Field
@@ -440,10 +456,10 @@ export default function TransactionDetailsEditor({
                 title="Ricorda esercente, categoria e sottocategoria"
               />
               <CheckRow
-                checked={rememberPurpose}
-                onChange={setRememberPurpose}
-                title="Ricorda anche la finalità"
-                disabled={!remember || !form.purposeId}
+                checked={rememberMicrocategory}
+                onChange={setRememberMicrocategory}
+                title="Ricorda anche la microcategoria"
+                disabled={!remember || !form.microcategoryId}
               />
             </div>
           )}
@@ -660,7 +676,7 @@ function labelForQuick(type) {
   return {
     category: "categoria",
     subcategory: "sottocategoria",
-    purpose: "finalità",
+    microcategory: "microcategoria",
     tag: "etichetta",
   }[type];
 }
