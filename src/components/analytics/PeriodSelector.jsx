@@ -9,6 +9,9 @@ export default function PeriodSelector({
   range,
   customRange,
   onCustomRangeChange,
+  comparisonRange,
+  customComparisonRange,
+  onCustomComparisonRangeChange,
 }) {
   return (
     <section className="rounded-[1.6rem] border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80">
@@ -96,6 +99,52 @@ export default function PeriodSelector({
             />
           </label>
         </div>
+      )}
+
+      {comparison === "preset:custom" && (
+        <div className="mt-4 grid gap-3 rounded-2xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-500/20 dark:bg-violet-500/10 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-bold text-slate-500 dark:text-slate-400">
+              Confronta dal giorno
+            </span>
+            <input
+              type="date"
+              value={customComparisonRange.start}
+              max={customComparisonRange.end || undefined}
+              onChange={(event) =>
+                onCustomComparisonRangeChange({
+                  ...customComparisonRange,
+                  start: event.target.value,
+                })
+              }
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-bold text-slate-500 dark:text-slate-400">
+              Confronta al giorno
+            </span>
+            <input
+              type="date"
+              value={customComparisonRange.end}
+              min={customComparisonRange.start || undefined}
+              onChange={(event) =>
+                onCustomComparisonRangeChange({
+                  ...customComparisonRange,
+                  end: event.target.value,
+                })
+              }
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            />
+          </label>
+        </div>
+      )}
+
+      {comparisonRange && (
+        <p className="mt-3 text-xs font-semibold text-slate-400">
+          Intervallo di confronto:{" "}
+          <span className="capitalize">{comparisonRange.label}</span>
+        </p>
       )}
     </section>
   );

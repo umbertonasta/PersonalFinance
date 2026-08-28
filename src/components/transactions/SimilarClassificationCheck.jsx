@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Check, History, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -14,7 +16,25 @@ export default function SimilarClassificationCheck({
   onContinue,
   onCancel,
 }) {
-  if (!matches?.length) return null;
+  useEffect(() => {
+    if (!matches?.length) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") onCancel();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [matches, onCancel]);
+
+  if (!matches?.length || typeof document === "undefined") return null;
 
   const categoryMap = new Map(
     taxonomy.categories.map((item) => [item.id, item]),
@@ -37,13 +57,13 @@ export default function SimilarClassificationCheck({
       .join(" → ");
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/70 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[10000] flex items-end justify-center bg-slate-950/75 p-0 backdrop-blur-md sm:items-center sm:p-6"
       onMouseDown={onCancel}
     >
       <section
-        className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-t-[2rem] border border-amber-200 bg-white p-5 shadow-2xl dark:border-amber-500/20 dark:bg-slate-900 sm:rounded-[2rem] sm:p-6"
+        className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-t-[2rem] border border-amber-200 bg-white p-5 shadow-2xl shadow-black/30 dark:border-amber-500/20 dark:bg-slate-900 sm:max-h-[88vh] sm:rounded-[2rem] sm:p-6"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -133,6 +153,7 @@ export default function SimilarClassificationCheck({
           </Button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

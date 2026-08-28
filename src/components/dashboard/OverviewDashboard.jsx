@@ -37,12 +37,18 @@ import {
   comparisonRange,
   inRange,
   rangeFromPreset,
+  rangeDurationDays,
 } from "@/lib/dateRanges";
 import SmallExpenses from "@/components/analytics/SmallExpenses";
 import RecurringExpenses from "@/components/analytics/RecurringExpenses";
 import AutomaticInsights from "@/components/analytics/AutomaticInsights";
 import TransactionDrilldown from "@/components/analytics/TransactionDrilldown";
 import SameMonthYears from "@/components/analytics/SameMonthYears";
+import SpendingChangeDrivers from "@/components/analytics/SpendingChangeDrivers";
+import TopChanges from "@/components/analytics/TopChanges";
+import WeekendComparison from "@/components/analytics/WeekendComparison";
+import MonthPhaseAnalysis from "@/components/analytics/MonthPhaseAnalysis";
+import DashboardNavigator from "@/components/dashboard/DashboardNavigator";
 
 const euro = new Intl.NumberFormat("it-IT", {
   style: "currency",
@@ -60,7 +66,7 @@ export default function OverviewDashboard({
   const [taxonomy, setTaxonomy] = useState({
     categories: [],
     subcategories: [],
-    purposes: [],
+    microcategories: [],
     tags: [],
   });
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
@@ -70,6 +76,17 @@ export default function OverviewDashboard({
   const [comparisonMode, setComparisonMode] = useState("previous");
   const [yearDetail, setYearDetail] = useState(null);
   const [customRange, setCustomRange] = useState({
+    start: `${month}-01`,
+    end: new Date(
+      new Date(`${month}-01T12:00:00`).getFullYear(),
+      new Date(`${month}-01T12:00:00`).getMonth() + 1,
+      0,
+      12,
+    )
+      .toISOString()
+      .slice(0, 10),
+  });
+  const [customComparisonRange, setCustomComparisonRange] = useState({
     start: `${month}-01`,
     end: new Date(
       new Date(`${month}-01T12:00:00`).getFullYear(),
@@ -93,9 +110,18 @@ export default function OverviewDashboard({
     [periodPreset, month, transactions, customRange],
   );
   const compareRange = useMemo(
-    () => comparisonRange(range, comparisonMode),
-    [range, comparisonMode],
+    () =>
+      comparisonRange(
+        range,
+        comparisonMode,
+        month,
+        transactions,
+        customComparisonRange,
+      ),
+    [range, comparisonMode, month, transactions, customComparisonRange],
   );
+  const rangeDays = rangeDurationDays(range);
+  const comparisonDays = rangeDurationDays(compareRange);
   const model = useMemo(
     () =>
       buildDashboardModel(transactions, taxonomy, budgets, range, compareRange),
@@ -140,14 +166,28 @@ export default function OverviewDashboard({
         range={range}
         customRange={customRange}
         onCustomRangeChange={setCustomRange}
+        comparisonRange={compareRange}
+        customComparisonRange={customComparisonRange}
+        onCustomComparisonRangeChange={setCustomComparisonRange}
       />
+      <DashboardNavigator />
       {compareRange && (
         <p className="px-2 text-xs font-semibold text-slate-400">
           Confronto attivo con:{" "}
           <span className="capitalize">{compareRange.label}</span>
         </p>
       )}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {compareRange && rangeDays !== comparisonDays && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+          I periodi hanno durate diverse: {rangeDays} giorni contro{" "}
+          {comparisonDays} giorni. I totali restano confrontabili, ma la media
+          giornaliera offre un confronto più equo.
+        </div>
+      )}
+      <section
+        id="overview"
+        className="grid scroll-mt-24 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      >
         <MetricCard
           title="Entrate"
           value={model.income}
@@ -164,7 +204,7 @@ export default function OverviewDashboard({
           reverse
         />
         <MetricCard
-          title="Saldo del mese"
+          title="Saldo del periodo"
           value={model.balance}
           icon={Wallet}
           tone="blue"
@@ -309,6 +349,28 @@ export default function OverviewDashboard({
         </DashboardPanel>
       </section>
 
+      <div id="categories" className="dashboard-section-heading">
+        <p className="section-kicker">Categorie e cambiamenti</p>
+        <h2>Dove stanno andando i soldi?</h2>
+        <p>
+          Confronti spiegati, variazioni e categorie che hanno inciso sul
+          periodo.
+        </p>
+      </div>
+      <SpendingChangeDrivers
+        transactions={transactions}
+        taxonomy={taxonomy}
+        range={range}
+        compareRange={compareRange}
+        onOpen={setInsightDetail}
+      />
+      <TopChanges
+        transactions={transactions}
+        taxonomy={taxonomy}
+        range={range}
+        compareRange={compareRange}
+        onOpen={setInsightDetail}
+      />
       <CategoryComparison
         transactions={transactions}
         taxonomy={taxonomy}
@@ -323,6 +385,25 @@ export default function OverviewDashboard({
         onSelectYear={setYearDetail}
       />
 
+      <div id="habits" className="dashboard-section-heading">
+        <p className="section-kicker">Le tue abitudini</p>
+        <h2>Quando e come tendi a spendere?</h2>
+        <p>
+          Ritmi settimanali, momenti del mese e distribuzione degli importi.
+        </p>
+      </div>
+      <section className="grid gap-4 xl:grid-cols-2">
+        <WeekendComparison
+          transactions={transactions}
+          range={range}
+          onOpen={setInsightDetail}
+        />
+        <MonthPhaseAnalysis
+          transactions={transactions}
+          range={range}
+          onOpen={setInsightDetail}
+        />
+      </section>
       <ExplorationCharts
         transactions={transactions}
         range={range}
@@ -330,6 +411,13 @@ export default function OverviewDashboard({
         onEditTransaction={onEditTransaction}
       />
 
+      <div id="signals" className="dashboard-section-heading">
+        <p className="section-kicker">Segnali da approfondire</p>
+        <h2>Cosa merita attenzione?</h2>
+        <p>
+          Piccole spese, ricorrenze e osservazioni concrete ricavate dai dati.
+        </p>
+      </div>
       <section className="grid gap-4 xl:grid-cols-2">
         <SmallExpenses
           transactions={transactions}
@@ -494,7 +582,9 @@ function CategoryDetail({
       )
     : categoryRows;
   const subMap = new Map(taxonomy.subcategories.map((item) => [item.id, item]));
-  const purposeMap = new Map(taxonomy.purposes.map((item) => [item.id, item]));
+  const microcategoryMap = new Map(
+    (taxonomy.microcategories || []).map((item) => [item.id, item]),
+  );
   const subcategoryData = Object.values(
     categoryRows.reduce((acc, item) => {
       const sub = subMap.get(item.subcategory_id);
@@ -514,11 +604,11 @@ function CategoryDetail({
     (sum, item) => sum + Number(item.amount),
     0,
   );
-  const purposes = Object.values(
+  const microcategories = Object.values(
     filteredRows.reduce((acc, item) => {
-      const purpose = purposeMap.get(item.purpose_id);
+      const purpose = microcategoryMap.get(item.microcategory_id);
       const key = purpose?.id || "none";
-      acc[key] ||= { name: purpose?.name || "Senza finalità", value: 0 };
+      acc[key] ||= { name: purpose?.name || "Senza microcategoria", value: 0 };
       acc[key].value += Number(item.amount);
       return acc;
     }, {}),
@@ -637,21 +727,30 @@ function CategoryDetail({
           </div>
         </DashboardPanel>
         <DashboardPanel
-          title="Finalità"
-          subtitle="Il motivo della spesa, quando indicato"
+          title="Microcategorie"
+          subtitle="Il dettaglio specifico degli acquisti nel periodo"
         >
           <div className="space-y-3">
-            {purposes.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between rounded-xl bg-slate-50/70 p-3 dark:bg-slate-800/45"
-              >
-                <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
-                  {item.name}
-                </span>
-                <strong>{euro.format(item.value)}</strong>
-              </div>
-            ))}
+            {microcategories.length > 0 ? (
+              microcategories.map((item) => (
+                <div
+                  key={item.name}
+                  className="flex items-center justify-between rounded-xl bg-slate-50/70 p-3 dark:bg-slate-800/45"
+                >
+                  <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                    {item.name}
+                  </span>
+
+                  <strong className="text-slate-950 dark:text-white">
+                    {euro.format(item.value)}
+                  </strong>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-400 dark:border-slate-700">
+                Nessuna microcategoria assegnata nel periodo.
+              </p>
+            )}
           </div>
         </DashboardPanel>
       </section>
@@ -708,7 +807,7 @@ function CategoryDetail({
         }
       >
         <div className="space-y-2">
-          {filteredRows
+          {[...filteredRows]
             .sort((a, b) => b.date.localeCompare(a.date))
             .map((item) => (
               <button
@@ -734,8 +833,8 @@ function CategoryDetail({
                   <span className="text-xs text-slate-400">
                     {subMap.get(item.subcategory_id)?.name ||
                       "Senza sottocategoria"}
-                    {item.purpose_id
-                      ? ` · ${purposeMap.get(item.purpose_id)?.name || "Finalità"}`
+                    {item.microcategory_id
+                      ? ` · ${microcategoryMap.get(item.microcategory_id)?.name || "Microcategoria"}`
                       : ""}{" "}
                     ·{" "}
                     {new Date(`${item.date}T12:00:00`).toLocaleDateString(

@@ -1,71 +1,120 @@
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+
 const euro = new Intl.NumberFormat("it-IT", {
   style: "currency",
   currency: "EUR",
 });
+
 export default function TransactionDrilldown({ detail, onClose, onEdit }) {
-  if (!detail) return null;
-  const total = detail.rows.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0,
-  );
-  return (
+  useEffect(() => {
+    if (!detail) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [detail, onClose]);
+
+  if (!detail || typeof document === "undefined") return null;
+
+  const rows = Array.isArray(detail.rows) ? [...detail.rows] : [];
+  rows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+
+  const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/65 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[9999] flex items-end justify-center bg-slate-950/75 p-0 backdrop-blur-md sm:items-center sm:p-6"
       onMouseDown={onClose}
+      role="presentation"
     >
       <section
-        className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-white p-6 shadow-2xl dark:bg-slate-900 sm:rounded-[2rem]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transaction-drilldown-title"
+        className="relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[2rem] border border-slate-200 bg-white shadow-2xl shadow-black/30 dark:border-white/10 dark:bg-slate-900 sm:max-h-[86vh] sm:rounded-[2rem]"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex justify-between gap-4">
-          <div>
+        <header className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white/95 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95 sm:p-6">
+          <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[.16em] text-blue-600 dark:text-emerald-400">
               Dettaglio dati
             </p>
-            <h2 className="mt-2 text-2xl font-black dark:text-white">
+            <h2
+              id="transaction-drilldown-title"
+              className="mt-2 truncate text-2xl font-black text-slate-950 dark:text-white"
+            >
               {detail.title}
             </h2>
-            <p className="text-sm text-slate-400">
-              {detail.rows.length} movimenti · {euro.format(total)}
+            <p className="mt-1 text-sm text-slate-400">
+              {rows.length} movimenti · {euro.format(total)}
             </p>
           </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            aria-label="Chiudi dettaglio"
           >
             <X size={18} />
           </button>
-        </div>
-        <div className="mt-5 space-y-2">
-          {detail.rows
-            .sort((a, b) => b.date.localeCompare(a.date))
-            .map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onEdit(item)}
-                className="flex w-full gap-3 rounded-2xl bg-slate-50 p-3 text-left dark:bg-slate-800/50"
-              >
-                <span className="min-w-0 flex-1">
-                  <strong className="block truncate dark:text-white">
-                    {item.description}
-                  </strong>
-                  <span className="text-xs text-slate-400">
-                    {new Date(`${item.date}T12:00:00`).toLocaleDateString(
-                      "it-IT",
-                    )}{" "}
-                    · {item.category || "Da classificare"}
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+          {rows.length > 0 ? (
+            <div className="space-y-2">
+              {rows.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onEdit(item)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-transparent bg-slate-50 p-3 text-left transition hover:border-slate-200 hover:bg-white dark:bg-slate-800/50 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-slate-950 dark:text-white">
+                      {item.description}
+                    </strong>
+                    <span className="text-xs text-slate-400">
+                      {new Date(`${item.date}T12:00:00`).toLocaleDateString(
+                        "it-IT",
+                      )}{" "}
+                      · {item.category || "Da classificare"}
+                    </span>
                   </span>
-                </span>
-                <strong className="text-rose-600">
-                  −{euro.format(item.amount)}
-                </strong>
-              </button>
-            ))}
+
+                  <strong
+                    className={
+                      item.type === "income"
+                        ? "shrink-0 text-emerald-600"
+                        : "shrink-0 text-rose-600"
+                    }
+                  >
+                    {item.type === "income" ? "+" : "−"}
+                    {euro.format(item.amount)}
+                  </strong>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="grid min-h-40 place-items-center rounded-2xl border border-dashed border-slate-300 text-center text-sm text-slate-400 dark:border-slate-700">
+              Nessun movimento disponibile.
+            </div>
+          )}
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

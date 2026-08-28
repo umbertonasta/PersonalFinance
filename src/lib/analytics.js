@@ -95,3 +95,127 @@ function cumulativeSeries(rows, range, series, normalizeDates = false) {
     return { index, label: `Giorno ${index + 1}`, value: total, series };
   });
 }
+
+export function buildChangeDrivers(
+  transactions,
+  range,
+  compareRange,
+  categories = [],
+) {
+  const categoryMap = new Map(categories.map((item) => [item.id, item]));
+  const collect = (selectedRange) => {
+    const totals = new Map();
+    if (!selectedRange) return totals;
+    expenseRows(transactions, selectedRange).forEach((item) => {
+      const key = item.category_id || "pending";
+      totals.set(key, (totals.get(key) || 0) + Number(item.amount));
+    });
+    return totals;
+  };
+  const current = collect(range);
+  const comparison = collect(compareRange);
+  const keys = new Set([...current.keys(), ...comparison.keys()]);
+  return [...keys]
+    .map((key) => {
+      const category = categoryMap.get(key);
+      const currentValue = current.get(key) || 0;
+      const comparisonValue = comparison.get(key) || 0;
+      return {
+        key,
+        categoryId: category?.id || null,
+        name: category?.name || "Da classificare",
+        icon: category?.icon || "?",
+        current: currentValue,
+        comparison: comparisonValue,
+        difference: currentValue - comparisonValue,
+        variation: comparisonValue
+          ? ((currentValue - comparisonValue) / comparisonValue) * 100
+          : null,
+        rows: expenseRows(transactions, range).filter(
+          (item) => (item.category_id || "pending") === key,
+        ),
+      };
+    })
+    .filter((item) => item.current || item.comparison)
+    .sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference));
+}
+
+export function buildWeekendComparison(transactions, range) {
+  const rows = expenseRows(transactions, range);
+  const groups = [
+    {
+      key: "workdays",
+      name: "Giorni lavorativi",
+      total: 0,
+      count: 0,
+      days: new Set(),
+      rows: [],
+    },
+    {
+      key: "weekend",
+      name: "Weekend",
+      total: 0,
+      count: 0,
+      days: new Set(),
+      rows: [],
+    },
+  ];
+  rows.forEach((item) => {
+    const day = new Date(`${item.date}T12:00:00`).getDay();
+    const group = groups[day === 0 || day === 6 ? 1 : 0];
+    group.total += Number(item.amount);
+    group.count += 1;
+    group.days.add(item.date);
+    group.rows.push(item);
+  });
+  return groups.map((group) => ({
+    ...group,
+    days: group.days.size,
+    dailyAverage: group.days.size ? group.total / group.days.size : 0,
+  }));
+}
+
+export function buildMonthPhases(transactions, range) {
+  const rows = expenseRows(transactions, range);
+  const phases = [
+    {
+      key: "early",
+      name: "Giorni 1-10",
+      min: 1,
+      max: 10,
+      total: 0,
+      count: 0,
+      rows: [],
+    },
+    {
+      key: "middle",
+      name: "Giorni 11-20",
+      min: 11,
+      max: 20,
+      total: 0,
+      count: 0,
+      rows: [],
+    },
+    {
+      key: "late",
+      name: "Giorni 21-fine",
+      min: 21,
+      max: 31,
+      total: 0,
+      count: 0,
+      rows: [],
+    },
+  ];
+  rows.forEach((item) => {
+    const day = Number(item.date.slice(8, 10));
+    const phase = phases.find((entry) => day >= entry.min && day <= entry.max);
+    phase.total += Number(item.amount);
+    phase.count += 1;
+    phase.rows.push(item);
+  });
+  const total = phases.reduce((sum, item) => sum + item.total, 0);
+  return phases.map((item) => ({
+    ...item,
+    share: total ? (item.total / total) * 100 : 0,
+  }));
+}
