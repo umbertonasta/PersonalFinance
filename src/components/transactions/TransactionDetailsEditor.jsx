@@ -18,6 +18,11 @@ import {
   createTag,
   loadTaxonomy,
 } from "@/lib/taxonomyDb";
+import SimilarClassificationCheck from "@/components/transactions/SimilarClassificationCheck";
+import {
+  findSimilarClassifications,
+  mostCommonClassification,
+} from "@/lib/classificationSimilarity";
 
 const emptyQuick = { type: null, name: "", icon: "", color: "#64748b" };
 
@@ -27,6 +32,7 @@ export default function TransactionDetailsEditor({
   saving = false,
   onCancel,
   onSave,
+  transactions = [],
 }) {
   const [taxonomy, setTaxonomy] = useState({
     categories: [],
@@ -37,6 +43,7 @@ export default function TransactionDetailsEditor({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [quick, setQuick] = useState(emptyQuick);
+  const [similarityCheck, setSimilarityCheck] = useState(null);
   const [remember, setRemember] = useState(
     Boolean(transaction?.normalized_merchant),
   );
@@ -160,26 +167,56 @@ export default function TransactionDetailsEditor({
     }
   }
 
-  function submit() {
+  function buildSubmission() {
     const amount = Number(String(form.amount).replace(",", "."));
     if (!amount || amount <= 0 || !form.description.trim() || !form.date) {
       setError("Compila descrizione, data e importo.");
-      return;
+      return null;
     }
     if (!form.categoryId) {
       setError("Seleziona una categoria.");
-      return;
+      return null;
     }
-    onSave({
+    return {
       ...form,
       amount,
       description: form.description.trim(),
+      rawDescription: transaction?.raw_description || form.description.trim(),
       category: selectedCategory?.name || null,
       remember,
       rememberMicrocategory,
-    });
+    };
   }
 
+  function submit() {
+    setError("");
+    const candidate = buildSubmission();
+    if (!candidate) return;
+    const matches = findSimilarClassifications({
+      candidate,
+      transactions,
+      currentId: transaction?.id,
+    });
+    if (matches.length) {
+      setSimilarityCheck({ candidate, matches });
+      return;
+    }
+    onSave(candidate);
+  }
+
+  function usePreviousClassification(previousTransaction) {
+    const nextForm = {
+      ...form,
+      categoryId: previousTransaction.category_id || "",
+      subcategoryId: previousTransaction.subcategory_id || "",
+      microcategoryId: previousTransaction.microcategory_id || "",
+    };
+    setForm(nextForm);
+    setSimilarityCheck(null);
+    setError(
+      "Classificazione precedente applicata. Controlla e premi nuovamente Salva.",
+    );
+  }
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
@@ -483,6 +520,20 @@ export default function TransactionDetailsEditor({
         </>
       )}
 
+      {similarityCheck && (
+        <SimilarClassificationCheck
+          matches={similarityCheck.matches}
+          taxonomy={taxonomy}
+          candidate={similarityCheck.candidate}
+          onUsePrevious={usePreviousClassification}
+          onContinue={() => {
+            const candidate = similarityCheck.candidate;
+            setSimilarityCheck(null);
+            onSave(candidate);
+          }}
+          onCancel={() => setSimilarityCheck(null)}
+        />
+      )}
       {quick.type && (
         <div
           className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/65 p-0 backdrop-blur-sm sm:items-center sm:p-4"

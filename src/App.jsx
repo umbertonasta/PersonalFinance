@@ -1373,6 +1373,7 @@ function App() {
               : { type: "expense", date: today(), recurring: false }
           }
           mode="edit"
+          transactions={transactions}
           saving={savingMovement}
           onCancel={() => {
             setTxModal(false);
@@ -1440,6 +1441,7 @@ function App() {
             key={reviewItem.id}
             transaction={reviewItem}
             mode="review"
+            transactions={transactions}
             saving={savingMovement}
             onCancel={() => setReviewItem(null)}
             onSave={saveDetailedReview}
