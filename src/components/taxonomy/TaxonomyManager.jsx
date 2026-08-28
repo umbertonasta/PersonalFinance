@@ -164,14 +164,14 @@ export default function TaxonomyManager({ onChanged }) {
             name: form.name,
             icon: form.icon || "📦",
             color: form.color,
-            categoryType: form.categoryType,
+            categoryType: "both",
           });
         } else {
           await updateCategory(item.id, {
             name: form.name,
             icon: form.icon || "📦",
             color: form.color,
-            categoryType: form.categoryType,
+            categoryType: "both",
           });
         }
       }
@@ -680,23 +680,6 @@ function EditorFields({ activeTab, form, categories, onChange }) {
           />
         </div>
       </label>
-
-      {activeTab === "categories" && (
-        <label className="block">
-          <span className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
-            Tipo
-          </span>
-          <select
-            value={form.categoryType}
-            onChange={(event) => onChange({ categoryType: event.target.value })}
-            className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-950 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-          >
-            <option value="expense">Spese</option>
-            <option value="income">Entrate</option>
-            <option value="both">Entrate e spese</option>
-          </select>
-        </label>
-      )}
     </div>
   );
 }

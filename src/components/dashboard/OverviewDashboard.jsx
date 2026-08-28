@@ -38,6 +38,11 @@ import {
   inRange,
   rangeFromPreset,
 } from "@/lib/dateRanges";
+import SmallExpenses from "@/components/analytics/SmallExpenses";
+import RecurringExpenses from "@/components/analytics/RecurringExpenses";
+import AutomaticInsights from "@/components/analytics/AutomaticInsights";
+import TransactionDrilldown from "@/components/analytics/TransactionDrilldown";
+import SameMonthYears from "@/components/analytics/SameMonthYears";
 
 const euro = new Intl.NumberFormat("it-IT", {
   style: "currency",
@@ -63,6 +68,7 @@ export default function OverviewDashboard({
   const [selectedMerchant, setSelectedMerchant] = useState(null);
   const [periodPreset, setPeriodPreset] = useState("month");
   const [comparisonMode, setComparisonMode] = useState("previous");
+  const [yearDetail, setYearDetail] = useState(null);
   const [customRange, setCustomRange] = useState({
     start: `${month}-01`,
     end: new Date(
@@ -74,6 +80,7 @@ export default function OverviewDashboard({
       .toISOString()
       .slice(0, 10),
   });
+  const [insightDetail, setInsightDetail] = useState(null);
 
   useEffect(() => {
     loadTaxonomy({ includeHidden: true })
@@ -310,12 +317,34 @@ export default function OverviewDashboard({
         onOpenCategory={setSelectedCategoryId}
       />
 
+      <SameMonthYears
+        transactions={transactions}
+        anchorMonth={month}
+        onSelectYear={setYearDetail}
+      />
+
       <ExplorationCharts
         transactions={transactions}
         range={range}
         compareRange={compareRange}
         onEditTransaction={onEditTransaction}
       />
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <SmallExpenses
+          transactions={transactions}
+          range={range}
+          compareRange={compareRange}
+          onOpen={setInsightDetail}
+        />
+        <RecurringExpenses
+          transactions={transactions}
+          range={range}
+          onOpen={setInsightDetail}
+        />
+      </section>
+
+      <AutomaticInsights model={model} onOpen={setInsightDetail} />
 
       <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <DashboardPanel
@@ -399,6 +428,39 @@ export default function OverviewDashboard({
           </div>
         </DashboardPanel>
       </section>
+
+      <TransactionDrilldown
+        detail={insightDetail}
+        onClose={() => setInsightDetail(null)}
+        onEdit={onEditTransaction}
+      />
+
+      <TransactionDrilldown
+        detail={
+          yearDetail
+            ? {
+                title: `${new Date(`${month}-01T12:00:00`).toLocaleDateString(
+                  "it-IT",
+                  {
+                    month: "long",
+                  },
+                )} ${yearDetail.year}`,
+                rows: yearDetail.rows,
+              }
+            : null
+        }
+        onClose={() => setYearDetail(null)}
+        onEdit={onEditTransaction}
+      />
+
+      <MerchantDetail
+        merchant={selectedMerchant}
+        transactions={transactions}
+        range={range}
+        onClose={() => setSelectedMerchant(null)}
+        onEditTransaction={onEditTransaction}
+      />
+
       <MerchantDetail
         merchant={selectedMerchant}
         transactions={transactions}

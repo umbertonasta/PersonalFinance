@@ -86,12 +86,8 @@ export default function TransactionDetailsEditor({
   }, []);
 
   const availableCategories = useMemo(
-    () =>
-      taxonomy.categories.filter(
-        (item) =>
-          item.category_type === form.type || item.category_type === "both",
-      ),
-    [taxonomy.categories, form.type],
+    () => taxonomy.categories.filter((item) => !item.is_hidden),
+    [taxonomy.categories],
   );
   const availableSubcategories = useMemo(
     () =>
@@ -116,7 +112,7 @@ export default function TransactionDetailsEditor({
           name: quick.name,
           icon: quick.icon || "📦",
           color: quick.color,
-          categoryType: form.type,
+          categoryType: "both",
         });
         await refreshTaxonomy();
         update({ categoryId: created.id, subcategoryId: "" });
