@@ -9,7 +9,9 @@ const HYPE_HEADERS = [
 ];
 
 function clean(value) {
-  return String(value ?? "").replace(/^\uFEFF/, "").trim();
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim();
 }
 
 function normalizeHeader(value) {
@@ -95,12 +97,40 @@ function suggestCategory(name, description, type) {
   if (type === "income") return null;
   const text = `${name} ${description}`.toUpperCase();
   const suggestions = [
-    [["SPOTIFY", "DISNEY", "APPLE.COM/BILL", "GOOGLE ONE", "YOUTUBE"], "Abbonamenti", 0.96],
-    [["TRAINLINE", "TRENORD", "TICKET ATM", "MYCICERO", "TRASPORTI"], "Trasporti", 0.95],
-    [["CARREFOUR", "BENNET", "ESSELUNGA", "LIDL", "MARKET"], "Alimentari", 0.95],
-    [["AMAZON", "AMZN", "MEDIAWORLD", "VINTED", "ZALANDO", "BERSHKA", "PULL"], "Shopping", 0.72],
+    [
+      ["SPOTIFY", "DISNEY", "APPLE.COM/BILL", "GOOGLE ONE", "YOUTUBE"],
+      "Abbonamenti",
+      0.96,
+    ],
+    [
+      ["TRAINLINE", "TRENORD", "TICKET ATM", "MYCICERO", "TRASPORTI"],
+      "Trasporti",
+      0.95,
+    ],
+    [
+      ["CARREFOUR", "BENNET", "ESSELUNGA", "LIDL", "MARKET"],
+      "Alimentari",
+      0.95,
+    ],
+    [
+      ["AMAZON", "AMZN", "MEDIAWORLD", "VINTED", "ZALANDO", "BERSHKA", "PULL"],
+      "Shopping",
+      0.72,
+    ],
     [["BARBER", "FARMAC", "DENT", "CENTRO INTERPARTIMENTALE"], "Salute", 0.7],
-    [["CAFE", "BAR ", "RISTORANTE", "DELIVEROO", "KFC", "MC DONALD", "MCDONALD"], "Tempo libero", 0.72],
+    [
+      [
+        "CAFE",
+        "BAR ",
+        "RISTORANTE",
+        "DELIVEROO",
+        "KFC",
+        "MC DONALD",
+        "MCDONALD",
+      ],
+      "Tempo libero",
+      0.72,
+    ],
   ];
 
   for (const [patterns, category, confidence] of suggestions) {
@@ -114,22 +144,36 @@ function suggestCategory(name, description, type) {
 function classifyTransaction(transaction, rules) {
   const searchableText = `${transaction.name} ${transaction.raw_description}`;
   if (/KLARNA/i.test(searchableText)) {
-    return { ...transaction, category: null, category_id: null, subcategory_id: null, microcategory_id: null, suggested_category: null, confidence: 0, review_status: "needs_review" };
+    return {
+      ...transaction,
+      category: null,
+      category_id: null,
+      subcategory_id: null,
+      microcategory_id: null,
+      suggested_category: null,
+      confidence: 0,
+      review_status: "needs_review",
+    };
   }
   const personalRule = findRule(searchableText, rules);
 
   if (personalRule) {
+    const hasValidCategory = Boolean(personalRule.category_id);
     return {
       ...transaction,
       description: personalRule.normalized_merchant || transaction.name,
       normalized_merchant: personalRule.normalized_merchant || transaction.name,
-      category: personalRule.category,
+      category: personalRule.category || null,
       category_id: personalRule.category_id || null,
       subcategory_id: personalRule.subcategory_id || null,
-      microcategory_id: personalRule.remember_microcategory ? personalRule.microcategory_id || null : null,
-      suggested_category: null,
-      confidence: 1,
-      review_status: "verified",
+      microcategory_id: personalRule.remember_microcategory
+        ? personalRule.microcategory_id || null
+        : null,
+      suggested_category: hasValidCategory
+        ? null
+        : personalRule.category || null,
+      confidence: hasValidCategory ? 1 : 0.8,
+      review_status: hasValidCategory ? "verified" : "needs_review",
     };
   }
 
@@ -139,9 +183,11 @@ function classifyTransaction(transaction, rules) {
     );
     return {
       ...transaction,
-      category: isSalary ? "Stipendio" : "Altro",
+      category: null,
+      category_id: null,
+      suggested_category: isSalary ? "Stipendio" : "Altro",
       confidence: isSalary ? 0.98 : 0.8,
-      review_status: "verified",
+      review_status: "needs_review",
     };
   }
 
@@ -154,10 +200,11 @@ function classifyTransaction(transaction, rules) {
   if (suggestion?.confidence >= 0.9) {
     return {
       ...transaction,
-      category: suggestion.category,
-      suggested_category: null,
+      category: null,
+      category_id: null,
+      suggested_category: suggestion.category,
       confidence: suggestion.confidence,
-      review_status: "verified",
+      review_status: "needs_review",
     };
   }
 
@@ -240,7 +287,8 @@ export function parseHypeCsv(text, rules = []) {
       total: mapped.length,
       income: mapped.filter((item) => item.type === "income").length,
       expenses: mapped.filter((item) => item.type === "expense").length,
-      automatic: mapped.filter((item) => item.review_status === "verified").length,
+      automatic: mapped.filter((item) => item.review_status === "verified")
+        .length,
       review: mapped.filter((item) => item.review_status !== "verified").length,
       pending: mapped.filter((item) => item.bank_status === "pending").length,
     },

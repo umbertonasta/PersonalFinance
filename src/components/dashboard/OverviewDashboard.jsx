@@ -40,8 +40,6 @@ import {
   rangeDurationDays,
   todayIso,
 } from "@/lib/dateRanges";
-import SmallExpenses from "@/components/analytics/SmallExpenses";
-import RecurringExpenses from "@/components/analytics/RecurringExpenses";
 import AutomaticInsights from "@/components/analytics/AutomaticInsights";
 import TransactionDrilldown from "@/components/analytics/TransactionDrilldown";
 import SameMonthYears from "@/components/analytics/SameMonthYears";
@@ -346,8 +344,8 @@ export default function OverviewDashboard({
         </DashboardPanel>
 
         <DashboardPanel
-          title="Dove spendi"
-          subtitle="Seleziona una categoria per esplorarla"
+          title="Dove spendi - Categorie"
+          subtitle="Distribuzione delle spese per categoria · seleziona una voce per approfondire"
         >
           <div className="relative h-52">
             <ResponsiveContainer width="100%" height="100%">
@@ -416,14 +414,192 @@ export default function OverviewDashboard({
         </DashboardPanel>
       </section>
 
-      <div id="categories" className="dashboard-section-heading">
-        <p className="section-kicker">Categorie e cambiamenti</p>
-        <h2>Dove stanno andando i soldi?</h2>
+      <DashboardPanel
+        title="Principali sottocategorie"
+        subtitle="I dettagli che incidono maggiormente sulle spese del periodo"
+      >
+        {model.subcategories.length ? (
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={model.subcategories.slice(0, 8)}
+                layout="vertical"
+                margin={{ left: 24, right: 32, top: 4, bottom: 4 }}
+              >
+                <CartesianGrid horizontal={false} opacity={0.12} />
+                <XAxis
+                  type="number"
+                  axisLine={false}
+                  tickLine={false}
+                  fontSize={11}
+                  tickFormatter={(value) => `${Math.round(value)} €`}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  width={125}
+                  fontSize={12}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar
+                  dataKey="value"
+                  name="Spese"
+                  fill="#38bdf8"
+                  radius={[0, 10, 10, 0]}
+                  className="cursor-pointer"
+                  onClick={(item) =>
+                    setInsightDetail({
+                      title: `${item.name} · ${item.categoryName}`,
+                      rows: item.rows,
+                    })
+                  }
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <EmptyText text="Assegna una sottocategoria ai movimenti per visualizzare questa analisi." />
+        )}
+      </DashboardPanel>
+
+      <div className="dashboard-section-heading">
+        <p className="section-kicker">Le tue entrate</p>
+        <h2>Da dove arrivano i soldi?</h2>
         <p>
-          Confronti spiegati, variazioni e categorie che hanno inciso sul
-          periodo.
+          Analisi separata delle entrate per categoria e sottocategoria. Il
+          confronto con le spese resta nel grafico “Il ritmo del tuo denaro”.
         </p>
       </div>
+
+      <section className="grid items-start gap-4 xl:grid-cols-2">
+        <DashboardPanel
+          title="Entrate - Categorie"
+          subtitle="Distribuzione delle entrate per categoria"
+        >
+          {model.incomeCategories.length ? (
+            <>
+              <div className="relative h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={model.incomeCategories}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={60}
+                      outerRadius={92}
+                      paddingAngle={3}
+                    >
+                      {model.incomeCategories.map((item) => (
+                        <Cell key={item.id} fill={item.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+                  <div>
+                    <strong className="block text-xl text-emerald-600 dark:text-emerald-300">
+                      {euro.format(model.income)}
+                    </strong>
+                    <span className="text-xs text-slate-400">
+                      entrate totali
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {model.incomeCategories.slice(0, 6).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      setInsightDetail({
+                        title: `Entrate · ${item.name}`,
+                        rows: item.rows,
+                      })
+                    }
+                    className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <span
+                      className="grid h-9 w-9 place-items-center rounded-xl"
+                      style={{ backgroundColor: `${item.color}20` }}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <strong className="block truncate text-sm text-slate-950 dark:text-white">
+                        {item.name}
+                      </strong>
+                      <span className="text-xs text-slate-400">
+                        {item.count} movimenti · {item.share.toFixed(0)}%
+                      </span>
+                    </span>
+                    <strong className="text-sm text-emerald-600 dark:text-emerald-300">
+                      +{euro.format(item.value)}
+                    </strong>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <EmptyText text="Nessuna entrata classificata nel periodo selezionato." />
+          )}
+        </DashboardPanel>
+
+        <DashboardPanel
+          title="Entrate - Sottocategorie"
+          subtitle="Le fonti specifiche delle entrate del periodo"
+        >
+          {model.incomeSubcategories.length ? (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={model.incomeSubcategories.slice(0, 8)}
+                  layout="vertical"
+                  margin={{ left: 24, right: 32, top: 4, bottom: 4 }}
+                >
+                  <CartesianGrid horizontal={false} opacity={0.12} />
+                  <XAxis
+                    type="number"
+                    axisLine={false}
+                    tickLine={false}
+                    fontSize={11}
+                    tickFormatter={(value) => `${Math.round(value)} €`}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    width={125}
+                    fontSize={12}
+                  />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar
+                    dataKey="value"
+                    name="Entrate"
+                    fill="#34d399"
+                    radius={[0, 10, 10, 0]}
+                    className="cursor-pointer"
+                    onClick={(item) =>
+                      setInsightDetail({
+                        title: `Entrate · ${item.name}`,
+                        rows: item.rows,
+                      })
+                    }
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <EmptyText text="Assegna una sottocategoria alle entrate per visualizzare questa analisi." />
+          )}
+        </DashboardPanel>
+      </section>
+
+      <div id="categories" className="scroll-mt-24" />
       <SpendingChangeDrivers
         transactions={transactions}
         taxonomy={taxonomy}
@@ -431,6 +607,15 @@ export default function OverviewDashboard({
         compareRange={compareRange}
         onOpen={setInsightDetail}
       />
+      <div className="dashboard-section-heading">
+        <p className="section-kicker">Aumenti e riduzioni</p>
+        <h2>Cosa è cambiato rispetto al confronto?</h2>
+        <p>
+          Le variazioni confrontano il periodo selezionato con{" "}
+          {compareRange ? compareRange.label : "il periodo di confronto"}. Gli
+          aumenti indicano spese maggiori, le riduzioni spese minori.
+        </p>
+      </div>
       <TopChanges
         transactions={transactions}
         taxonomy={taxonomy}
@@ -478,30 +663,10 @@ export default function OverviewDashboard({
         onEditTransaction={onEditTransaction}
       />
 
-      <div id="signals" className="dashboard-section-heading">
-        <p className="section-kicker">Segnali da approfondire</p>
-        <h2>Cosa merita attenzione?</h2>
-        <p>
-          Piccole spese, ricorrenze e osservazioni concrete ricavate dai dati.
-        </p>
-      </div>
-      <section className="grid gap-4 xl:grid-cols-2">
-        <SmallExpenses
-          transactions={transactions}
-          range={range}
-          compareRange={compareRange}
-          onOpen={setInsightDetail}
-        />
-        <RecurringExpenses
-          transactions={transactions}
-          range={range}
-          onOpen={setInsightDetail}
-        />
-      </section>
-
+      <div id="signals" className="scroll-mt-24" />
       <AutomaticInsights model={model} onOpen={setInsightDetail} />
 
-      <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      <section className="grid items-start gap-4 xl:grid-cols-2">
         <DashboardPanel
           title="Budget sotto controllo"
           subtitle="Quanto spazio resta questo mese"
@@ -522,32 +687,6 @@ export default function OverviewDashboard({
             ) : (
               <EmptyText text="Imposta almeno un budget nella sezione Sistema." />
             )}
-          </div>
-        </DashboardPanel>
-
-        <DashboardPanel
-          title="Principali esercenti"
-          subtitle="Chi incide di più sulle spese"
-        >
-          <div className="space-y-2">
-            {model.merchants.slice(0, 7).map((item, index) => (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => setSelectedMerchant(item.name)}
-                className="flex w-full items-center gap-3 rounded-xl bg-slate-50/70 p-3 text-left transition hover:bg-slate-100 dark:bg-slate-800/45 dark:hover:bg-slate-800"
-              >
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-xs font-black text-slate-500 shadow-sm dark:bg-slate-900">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-700 dark:text-slate-200">
-                  {item.name}
-                </span>
-                <strong className="text-sm text-slate-950 dark:text-white">
-                  {euro.format(item.value)}
-                </strong>
-              </button>
-            ))}
           </div>
         </DashboardPanel>
 
@@ -1126,6 +1265,65 @@ function buildDashboardModel(
   const previousExpenses = sum(
     comparisonRows.filter((item) => item.type === "expense"),
   );
+  const incomeRows = periodRows.filter(
+    (item) =>
+      item.type === "income" &&
+      item.review_status === "verified" &&
+      Boolean(item.category_id),
+  );
+  const incomeCategoryBuckets = new Map();
+  incomeRows.forEach((item) => {
+    const category = categoryMap.get(item.category_id);
+    if (!category) return;
+    const bucket = incomeCategoryBuckets.get(category.id) || {
+      id: category.id,
+      name: category.name,
+      icon: category.icon || "•",
+      color: category.color || "#34d399",
+      value: 0,
+      count: 0,
+      rows: [],
+    };
+    bucket.value += Number(item.amount);
+    bucket.count += 1;
+    bucket.rows.push(item);
+    incomeCategoryBuckets.set(category.id, bucket);
+  });
+  const incomeCategories = [...incomeCategoryBuckets.values()]
+    .map((item) => ({
+      ...item,
+      share: income ? (item.value / income) * 100 : 0,
+    }))
+    .sort((first, second) => second.value - first.value);
+
+  const incomeSubcategoryMap = new Map(
+    (taxonomy.subcategories || []).map((item) => [item.id, item]),
+  );
+  const incomeSubcategoryBuckets = new Map();
+  incomeRows
+    .filter(
+      (item) =>
+        item.subcategory_id && incomeSubcategoryMap.has(item.subcategory_id),
+    )
+    .forEach((item) => {
+      const subcategory = incomeSubcategoryMap.get(item.subcategory_id);
+      const bucket = incomeSubcategoryBuckets.get(subcategory.id) || {
+        id: subcategory.id,
+        name: subcategory.name,
+        categoryName:
+          categoryMap.get(item.category_id)?.name || item.category || "Entrata",
+        value: 0,
+        count: 0,
+        rows: [],
+      };
+      bucket.value += Number(item.amount);
+      bucket.count += 1;
+      bucket.rows.push(item);
+      incomeSubcategoryBuckets.set(subcategory.id, bucket);
+    });
+  const incomeSubcategories = [...incomeSubcategoryBuckets.values()].sort(
+    (first, second) => second.value - first.value,
+  );
   const pending = periodRows.filter(
     (item) => item.type === "expense" && item.review_status !== "verified",
   );
@@ -1190,17 +1388,41 @@ function buildDashboardModel(
     .filter((item) => item.limit > 0)
     .sort((first, second) => second.ratio - first.ratio);
 
-  const merchantMap = {};
+  const subcategoryMap = new Map(
+    (taxonomy.subcategories || []).map((item) => [item.id, item]),
+  );
+  const categoryNameMap = new Map(
+    (taxonomy.categories || []).map((item) => [item.id, item.name]),
+  );
+  const subcategoryBuckets = new Map();
   periodRows
-    .filter((item) => item.type === "expense")
+    .filter(
+      (item) =>
+        item.type === "expense" &&
+        item.review_status === "verified" &&
+        item.category_id &&
+        item.subcategory_id &&
+        subcategoryMap.has(item.subcategory_id),
+    )
     .forEach((item) => {
-      const name =
-        item.normalized_merchant || item.description || "Sconosciuto";
-      merchantMap[name] = (merchantMap[name] || 0) + Number(item.amount);
+      const subcategory = subcategoryMap.get(item.subcategory_id);
+      const bucket = subcategoryBuckets.get(subcategory.id) || {
+        id: subcategory.id,
+        name: subcategory.name,
+        categoryName:
+          categoryNameMap.get(item.category_id) || item.category || "Categoria",
+        value: 0,
+        count: 0,
+        rows: [],
+      };
+      bucket.value += Number(item.amount);
+      bucket.count += 1;
+      bucket.rows.push(item);
+      subcategoryBuckets.set(subcategory.id, bucket);
     });
-  const merchants = Object.entries(merchantMap)
-    .map(([name, value]) => ({ name, value }))
-    .sort((first, second) => second.value - first.value);
+  const subcategories = [...subcategoryBuckets.values()].sort(
+    (first, second) => second.value - first.value,
+  );
 
   const trend = buildTrend(transactions, range, compareRange);
   const expenseCount = periodRows.filter(
@@ -1210,6 +1432,10 @@ function buildDashboardModel(
   return {
     periodRows,
     income,
+    incomeCategories,
+    incomeSubcategories,
+    topIncomeCategory: incomeCategories[0] || null,
+    topIncomeSubcategory: incomeSubcategories[0] || null,
     expenses,
     balance: income - expenses,
     savingRate: income ? ((income - expenses) / income) * 100 : 0,
@@ -1219,7 +1445,8 @@ function buildDashboardModel(
     expenseChange: compareRange ? change(expenses, previousExpenses) : null,
     categories,
     budgetRows,
-    merchants,
+    subcategories,
+    topSubcategory: subcategories[0] || null,
     trend,
     pendingCount: pending.length,
     pendingValue: sum(pending),

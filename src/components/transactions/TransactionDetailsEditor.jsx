@@ -44,9 +44,7 @@ export default function TransactionDetailsEditor({
   const [error, setError] = useState("");
   const [quick, setQuick] = useState(emptyQuick);
   const [similarityCheck, setSimilarityCheck] = useState(null);
-  const [remember, setRemember] = useState(
-    Boolean(transaction?.normalized_merchant),
-  );
+  const [remember, setRemember] = useState(false);
   const [rememberMicrocategory, setRememberMicrocategory] = useState(false);
   const [showGuide, setShowGuide] = useState(
     () => localStorage.getItem("finance-classification-guide-seen") !== "true",

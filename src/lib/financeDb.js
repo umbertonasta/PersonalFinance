@@ -28,7 +28,10 @@ function fromTransactionRow(row) {
     tag_ids: row.tag_ids || [],
     suggested_category: row.suggested_category,
     confidence: row.confidence === null ? null : Number(row.confidence),
-    review_status: row.review_status,
+    review_status:
+      row.transaction_type === "expense" && !row.category_id
+        ? "needs_review"
+        : row.review_status,
     source: row.source,
     external_id: row.external_id,
     bank_status: row.bank_status,
@@ -37,6 +40,13 @@ function fromTransactionRow(row) {
 }
 
 function toTransactionRow(transaction, userId) {
+  const categoryId = transaction.categoryId || transaction.category_id || null;
+  const requestedStatus = transaction.review_status || "verified";
+  const reviewStatus =
+    transaction.type === "expense" && !categoryId
+      ? "needs_review"
+      : requestedStatus;
+
   return {
     user_id: userId,
     account_id: transaction.account_id || null,
@@ -48,7 +58,7 @@ function toTransactionRow(transaction, userId) {
       transaction.raw_description || transaction.description || "",
     normalized_merchant: transaction.normalized_merchant || null,
     category: transaction.category || null,
-    category_id: transaction.categoryId || transaction.category_id || null,
+    category_id: categoryId,
     subcategory_id:
       transaction.subcategoryId || transaction.subcategory_id || null,
     microcategory_id:
@@ -57,7 +67,7 @@ function toTransactionRow(transaction, userId) {
     suggested_category: transaction.suggested_category || null,
     confidence:
       transaction.confidence == null ? null : Number(transaction.confidence),
-    review_status: transaction.review_status || "verified",
+    review_status: reviewStatus,
     source: transaction.source || "manual",
     external_id: transaction.external_id || null,
     bank_status: transaction.bank_status || "booked",
@@ -183,6 +193,13 @@ export async function updateTransaction(transactionId, changes) {
   for (const [key, column] of Object.entries(map)) {
     if (key in changes)
       databaseChanges[column] = changes[key] === "" ? null : changes[key];
+  }
+  const nextType = changes.type || changes.transaction_type;
+  const categoryWasExplicitlyCleared =
+    ("categoryId" in changes && !changes.categoryId) ||
+    ("category_id" in changes && !changes.category_id);
+  if (nextType === "expense" && categoryWasExplicitlyCleared) {
+    databaseChanges.review_status = "needs_review";
   }
   const { data, error } = await supabase
     .from("transactions")

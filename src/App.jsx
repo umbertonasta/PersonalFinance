@@ -125,6 +125,13 @@ const cat = (name) =>
     color: "#f97316",
   };
 
+function needsClassification(transaction) {
+  return (
+    Boolean(transaction) &&
+    (transaction.review_status !== "verified" || !transaction.category_id)
+  );
+}
+
 const seed = [
   {
     id: "d1",
@@ -488,6 +495,9 @@ function App() {
   const [bankModal, setBankModal] = useState(false);
   const [csvModal, setCsvModal] = useState(false);
   const [reviewItem, setReviewItem] = useState(null);
+  const [selectedPendingIds, setSelectedPendingIds] = useState([]);
+  const [bulkClassification, setBulkClassification] = useState(null);
+  const [savingBulk, setSavingBulk] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     type: "expense",
@@ -538,6 +548,10 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    setSelectedPendingIds([]);
+  }, [month, tab]);
+
   const monthTx = useMemo(
     () => transactions.filter((t) => monthKey(t.date) === month),
     [transactions, month],
@@ -549,12 +563,8 @@ function App() {
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + Number(t.amount), 0);
   const balance = income - expenses;
-  const pending = transactions.filter(
-    (t) => t.type === "expense" && t.review_status !== "verified",
-  );
-  const monthPending = monthTx.filter(
-    (t) => t.type === "expense" && t.review_status !== "verified",
-  );
+  const pending = transactions.filter(needsClassification);
+  const monthPending = monthTx.filter(needsClassification);
   const verifiedExpenses = monthTx.filter(
     (t) => t.type === "expense" && t.category,
   );
@@ -830,6 +840,67 @@ function App() {
     }
   }
 
+  async function openBulkClassification() {
+    if (selectedPendingIds.length < 2) return;
+    try {
+      const taxonomy = await loadTaxonomy({ includeHidden: false });
+      setRuleTaxonomy(taxonomy);
+      setBulkClassification({
+        categoryId: "",
+        subcategoryId: "",
+        microcategoryId: "",
+      });
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error.message || "Impossibile caricare le categorie",
+      });
+    }
+  }
+
+  async function saveBulkClassification() {
+    if (!bulkClassification?.categoryId) return;
+    const category = ruleTaxonomy.categories.find(
+      (item) => item.id === bulkClassification.categoryId,
+    );
+    if (!category) return;
+    setSavingBulk(true);
+    try {
+      const selectedSet = new Set(selectedPendingIds);
+      const rows = transactions.filter((item) => selectedSet.has(item.id));
+      const results = await Promise.all(
+        rows.map((item) =>
+          updateTransaction(item.id, {
+            category: category.name,
+            categoryId: category.id,
+            subcategoryId: bulkClassification.subcategoryId || null,
+            microcategoryId: bulkClassification.microcategoryId || null,
+            suggested_category: null,
+            confidence: 1,
+            review_status: "verified",
+          }),
+        ),
+      );
+      const updated = new Map(results.map((item) => [item.id, item]));
+      setTransactions((current) =>
+        current.map((item) => updated.get(item.id) || item),
+      );
+      setSelectedPendingIds([]);
+      setBulkClassification(null);
+      setToast({
+        type: "success",
+        message: `${results.length} movimenti classificati insieme`,
+      });
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error.message || "Classificazione multipla non riuscita",
+      });
+    } finally {
+      setSavingBulk(false);
+    }
+  }
+
   async function saveDetailedMovement(details) {
     setSavingMovement(true);
     try {
@@ -1039,11 +1110,16 @@ function App() {
           Boolean(editingRule.microcategory_id),
         active: editingRule.active,
       });
-      setRules((current) => current.map((item) => item.id === saved.id ? saved : item));
+      setRules((current) =>
+        current.map((item) => (item.id === saved.id ? saved : item)),
+      );
       setEditingRule(null);
       setToast({ type: "success", message: "Regola aggiornata" });
     } catch (error) {
-      setToast({ type: "error", message: error.message || "Aggiornamento non riuscito" });
+      setToast({
+        type: "error",
+        message: error.message || "Aggiornamento non riuscito",
+      });
     } finally {
       setSavingRule(false);
     }
@@ -1059,9 +1135,7 @@ function App() {
       danger: true,
       action: async () => {
         await deleteMerchantRule(rule.id);
-        setRules((current) =>
-          current.filter((item) => item.id !== rule.id),
-        );
+        setRules((current) => current.filter((item) => item.id !== rule.id));
         if (editingRule?.id === rule.id) setEditingRule(null);
         setToast({ type: "success", message: "Regola eliminata" });
       },
@@ -1070,10 +1144,18 @@ function App() {
 
   async function toggleRule(rule) {
     try {
-      const saved = await updateMerchantRule(rule.id, { ...rule, active: !rule.active });
-      setRules((current) => current.map((item) => item.id === saved.id ? saved : item));
+      const saved = await updateMerchantRule(rule.id, {
+        ...rule,
+        active: !rule.active,
+      });
+      setRules((current) =>
+        current.map((item) => (item.id === saved.id ? saved : item)),
+      );
     } catch (error) {
-      setToast({ type: "error", message: error.message || "Modifica non riuscita" });
+      setToast({
+        type: "error",
+        message: error.message || "Modifica non riuscita",
+      });
     }
   }
 
@@ -1216,43 +1298,111 @@ function App() {
               subtitle="Nessuna categoria viene assegnata senza sufficiente certezza"
             >
               <div className="mb-5 rounded-2xl bg-orange-50 p-4 text-sm text-orange-900">
-                <b>Come funziona:</b> le spese dubbie sono già incluse nel
-                totale mensile, ma restano separate nei grafici finché non le
-                confermi.
+                <b>Come funziona:</b> entrate e spese non ancora classificate
+                restano nel limbo finché non assegni una categoria completa.
               </div>
               {pending.length ? (
                 <div className="space-y-3">
-                  {pending.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setReviewItem(t)}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-orange-100 bg-white p-4 text-left shadow-sm hover:border-orange-300"
-                    >
-                      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-xl">
-                        ❓
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/45">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+                      <input
+                        type="checkbox"
+                        checked={
+                          pending.length > 0 &&
+                          selectedPendingIds.length === pending.length
+                        }
+                        onChange={(event) =>
+                          setSelectedPendingIds(
+                            event.target.checked
+                              ? pending.map((item) => item.id)
+                              : [],
+                          )
+                        }
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                      Seleziona tutti, entrate e spese
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {selectedPendingIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPendingIds([])}
+                          className="rounded-xl px-3 py-2 text-xs font-black text-slate-500 hover:bg-white dark:hover:bg-slate-700"
+                        >
+                          Deseleziona
+                        </button>
+                      )}
+                      <Button
+                        type="button"
+                        onClick={openBulkClassification}
+                        disabled={selectedPendingIds.length < 2}
+                        className="rounded-xl"
+                      >
+                        Classifica insieme ({selectedPendingIds.length})
+                      </Button>
+                    </div>
+                  </div>
+                  {pending.map((t) => {
+                    const selected = selectedPendingIds.includes(t.id);
+                    return (
+                      <div
+                        key={t.id}
+                        className={`flex w-full items-center gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm transition dark:bg-slate-900 ${selected ? "border-blue-500 ring-2 ring-blue-500/15" : "border-orange-100 hover:border-orange-300 dark:border-orange-500/20"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(event) =>
+                            setSelectedPendingIds((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, t.id])]
+                                : current.filter((id) => id !== t.id),
+                            )
+                          }
+                          className="h-5 w-5 shrink-0 accent-blue-600"
+                          aria-label={`Seleziona ${t.description}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setReviewItem(t)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-xl">
+                            ❓
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <b className="block truncate">{t.description}</b>
+                            <span className="text-xs text-slate-400">
+                              {new Date(
+                                `${t.date}T12:00:00`,
+                              ).toLocaleDateString("it-IT")}{" "}
+                              ·{" "}
+                              {t.source === "bank"
+                                ? "Importata dalla banca"
+                                : "Manuale"}
+                            </span>
+                            {t.suggested_category && (
+                              <span className="mt-1 block text-xs font-bold text-orange-600">
+                                Suggerimento: {t.suggested_category} ·
+                                confidenza {Math.round(t.confidence * 100)}%
+                              </span>
+                            )}
+                          </div>
+                          <b
+                            className={
+                              t.type === "income"
+                                ? "text-emerald-600"
+                                : "text-rose-600"
+                            }
+                          >
+                            {t.type === "income" ? "+" : "−"}
+                            {euro.format(t.amount)}
+                          </b>
+                          <ChevronRight size={18} className="text-slate-300" />
+                        </button>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <b className="block truncate">{t.description}</b>
-                        <span className="text-xs text-slate-400">
-                          {new Date(`${t.date}T12:00:00`).toLocaleDateString(
-                            "it-IT",
-                          )}{" "}
-                          ·{" "}
-                          {t.source === "bank"
-                            ? "Importata dalla banca"
-                            : "Manuale"}
-                        </span>
-                        {t.suggested_category && (
-                          <span className="mt-1 block text-xs font-bold text-orange-600">
-                            Suggerimento: {t.suggested_category} · confidenza{" "}
-                            {Math.round(t.confidence * 100)}%
-                          </span>
-                        )}
-                      </div>
-                      <b className="text-rose-600">−{euro.format(t.amount)}</b>
-                      <ChevronRight size={18} className="text-slate-300" />
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="py-16 text-center">
@@ -1343,117 +1493,146 @@ function App() {
             <div className="self-start">
               <Panel
                 title="Regole di classificazione"
-              subtitle="Create dalle tue conferme"
-            >
-              <div className="space-y-2">
-                {(showAllRules ? rules : rules.slice(0, 6)).map((r) => (
-                  <div
-                    key={r.id}
-                    className={`rounded-xl border p-3 ${r.active ? "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/55" : "border-dashed border-slate-300 bg-slate-50/40 opacity-65 dark:border-slate-700 dark:bg-slate-800/25"}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="min-w-0 flex-1">
-                        <b className="block truncate">{r.normalized_merchant || r.pattern}</b>
-                        <small className="block truncate text-slate-400">contiene “{r.pattern}”</small>
-                        <small className="mt-1 block font-bold text-slate-500 dark:text-slate-300">
-                          {cat(r.category).icon} {r.category || "Nessuna categoria"} · {r.active ? "Attiva" : "Disattivata"}
-                        </small>
-                      </span>
-                      <div className="flex shrink-0 gap-1">
-                        <button type="button" onClick={() =>
-                          setEditingRule({
-                            ...r,
-                            microcategoryChoice:
-                              r.remember_microcategory && r.microcategory_id
-                                ? r.microcategory_id
-                                : "__omit__",
-                          })
-                        } className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-blue-600 dark:bg-slate-950 dark:text-slate-300" aria-label="Modifica regola"><Edit3 className="h-4 w-4" /></button>
-                        <button type="button" onClick={() => toggleRule(r)} className="rounded-lg bg-white px-2.5 text-xs font-black text-slate-500 hover:text-emerald-600 dark:bg-slate-950 dark:text-slate-300">{r.active ? "OFF" : "ON"}</button>
-                        <button type="button" onClick={() => removeRule(r)} className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-rose-600 dark:bg-slate-950 dark:text-slate-300" aria-label="Elimina regola"><Trash2 className="h-4 w-4" /></button>
+                subtitle="Create dalle tue conferme"
+              >
+                <div className="space-y-2">
+                  {(showAllRules ? rules : rules.slice(0, 6)).map((r) => (
+                    <div
+                      key={r.id}
+                      className={`rounded-xl border p-3 ${r.active ? "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/55" : "border-dashed border-slate-300 bg-slate-50/40 opacity-65 dark:border-slate-700 dark:bg-slate-800/25"}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="min-w-0 flex-1">
+                          <b className="block truncate">
+                            {r.normalized_merchant || r.pattern}
+                          </b>
+                          <small className="block truncate text-slate-400">
+                            contiene “{r.pattern}”
+                          </small>
+                          <small className="mt-1 block font-bold text-slate-500 dark:text-slate-300">
+                            {cat(r.category).icon}{" "}
+                            {r.category || "Nessuna categoria"} ·{" "}
+                            {r.active ? "Attiva" : "Disattivata"}
+                          </small>
+                        </span>
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingRule({
+                                ...r,
+                                microcategoryChoice:
+                                  r.remember_microcategory && r.microcategory_id
+                                    ? r.microcategory_id
+                                    : "__omit__",
+                              })
+                            }
+                            className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-blue-600 dark:bg-slate-950 dark:text-slate-300"
+                            aria-label="Modifica regola"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleRule(r)}
+                            className="rounded-lg bg-white px-2.5 text-xs font-black text-slate-500 hover:text-emerald-600 dark:bg-slate-950 dark:text-slate-300"
+                          >
+                            {r.active ? "OFF" : "ON"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeRule(r)}
+                            className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-rose-600 dark:bg-slate-950 dark:text-slate-300"
+                            aria-label="Elimina regola"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {rules.length > 6 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllRules((current) => !current)}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-cyan-400/50 dark:hover:text-cyan-300"
-                    aria-expanded={showAllRules}
-                  >
-                    {showAllRules ? (
-                      <>
-                        <ChevronUp className="h-4 w-4" />
-                        Mostra meno
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4" />
-                        Espandi tutte le regole ({rules.length})
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
+                  ))}
+                  {rules.length > 6 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllRules((current) => !current)}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-cyan-400/50 dark:hover:text-cyan-300"
+                      aria-expanded={showAllRules}
+                    >
+                      {showAllRules ? (
+                        <>
+                          <ChevronUp className="h-4 w-4" />
+                          Mostra meno
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-4 w-4" />
+                          Espandi tutte le regole ({rules.length})
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </Panel>
             </div>
             <div className="self-start">
               <Panel
                 title="Budget mensili"
-              subtitle="Imposta i limiti e salvali nel cloud"
-            >
-              <div className="space-y-3">
-                {CATEGORIES.filter((item) => item.name !== "Altro").map(
-                  (item) => (
-                    <label key={item.name} className="flex items-center gap-3">
-                      <span className="min-w-32 text-sm font-bold">
-                        {item.icon} {item.name}
-                      </span>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={budgetDraft[item.name] ?? ""}
-                        onChange={(event) =>
-                          setBudgetDraft((current) => ({
-                            ...current,
-                            [item.name]: event.target.value,
-                          }))
-                        }
-                        placeholder="Nessun limite"
-                        className="rounded-xl"
-                      />
-                    </label>
-                  ),
-                )}
-                <Button
-                  className="mt-2 h-11 w-full rounded-xl bg-slate-950"
-                  onClick={saveBudgetChanges}
-                  disabled={savingBudgets}
-                >
-                  {savingBudgets ? (
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="mr-2 h-4 w-4" />
+                subtitle="Imposta i limiti e salvali nel cloud"
+              >
+                <div className="space-y-3">
+                  {CATEGORIES.filter((item) => item.name !== "Altro").map(
+                    (item) => (
+                      <label
+                        key={item.name}
+                        className="flex items-center gap-3"
+                      >
+                        <span className="min-w-32 text-sm font-bold">
+                          {item.icon} {item.name}
+                        </span>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={budgetDraft[item.name] ?? ""}
+                          onChange={(event) =>
+                            setBudgetDraft((current) => ({
+                              ...current,
+                              [item.name]: event.target.value,
+                            }))
+                          }
+                          placeholder="Nessun limite"
+                          className="rounded-xl"
+                        />
+                      </label>
+                    ),
                   )}
-                  {savingBudgets ? "Salvataggio" : "Salva budget"}
-                </Button>
-              </div>
+                  <Button
+                    className="mt-2 h-11 w-full rounded-xl bg-slate-950"
+                    onClick={saveBudgetChanges}
+                    disabled={savingBudgets}
+                  >
+                    {savingBudgets ? (
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="mr-2 h-4 w-4" />
+                    )}
+                    {savingBudgets ? "Salvataggio" : "Salva budget"}
+                  </Button>
+                </div>
               </Panel>
             </div>
             <div className="self-start">
               <Panel
                 title="Backup"
-              subtitle="Continua a proteggere i dati locali"
-            >
-              <Button
-                variant="outline"
-                className="w-full rounded-xl"
-                onClick={exportBackup}
+                subtitle="Continua a proteggere i dati locali"
               >
-                <Download className="mr-2 h-4 w-4" />
-                Scarica backup JSON
-              </Button>
+                <Button
+                  variant="outline"
+                  className="w-full rounded-xl"
+                  onClick={exportBackup}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Scarica backup JSON
+                </Button>
               </Panel>
             </div>
             <Panel
@@ -1565,119 +1744,333 @@ function App() {
         </p>
       </Modal>
 
+      <Modal
+        open={Boolean(bulkClassification)}
+        onClose={() => !savingBulk && setBulkClassification(null)}
+      >
+        {bulkClassification && (
+          <div>
+            <ModalHead
+              title={`Classifica ${selectedPendingIds.length} movimenti`}
+              close={() => !savingBulk && setBulkClassification(null)}
+            />
+            <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-900 dark:bg-blue-500/10 dark:text-blue-100">
+              La stessa categoria, sottocategoria e microcategoria verranno
+              applicate a tutte le entrate e spese selezionate. Nessuna regola
+              automatica verrà creata.
+            </p>
+            <div className="mt-5 space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Categoria
+                </span>
+                <select
+                  value={bulkClassification.categoryId}
+                  onChange={(event) =>
+                    setBulkClassification({
+                      categoryId: event.target.value,
+                      subcategoryId: "",
+                      microcategoryId: "",
+                    })
+                  }
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <option value="">Seleziona categoria</option>
+                  {ruleTaxonomy.categories.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.icon || "•"} {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Sottocategoria
+                </span>
+                <select
+                  value={bulkClassification.subcategoryId}
+                  disabled={!bulkClassification.categoryId}
+                  onChange={(event) =>
+                    setBulkClassification((current) => ({
+                      ...current,
+                      subcategoryId: event.target.value,
+                      microcategoryId: "",
+                    }))
+                  }
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <option value="">Nessuna sottocategoria</option>
+                  {ruleTaxonomy.subcategories
+                    .filter(
+                      (item) =>
+                        item.category_id === bulkClassification.categoryId,
+                    )
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.icon || "•"} {item.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Microcategoria
+                </span>
+                <select
+                  value={bulkClassification.microcategoryId}
+                  disabled={!bulkClassification.subcategoryId}
+                  onChange={(event) =>
+                    setBulkClassification((current) => ({
+                      ...current,
+                      microcategoryId: event.target.value,
+                    }))
+                  }
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <option value="">Non inserire</option>
+                  {ruleTaxonomy.microcategories
+                    .filter(
+                      (item) =>
+                        !item.subcategory_id ||
+                        item.subcategory_id ===
+                          bulkClassification.subcategoryId,
+                    )
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.icon || "•"} {item.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl"
+                onClick={() => setBulkClassification(null)}
+                disabled={savingBulk}
+              >
+                Annulla
+              </Button>
+              <Button
+                className="h-11 rounded-xl"
+                onClick={saveBulkClassification}
+                disabled={savingBulk || !bulkClassification.categoryId}
+              >
+                {savingBulk ? (
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 h-4 w-4" />
+                )}
+                {savingBulk ? "Salvataggio" : "Conferma per tutti"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {editingRule && (
-      <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={() => setEditingRule(null)}>
-        <section className="w-full max-w-lg rounded-t-[2rem] bg-white p-5 shadow-2xl dark:bg-slate-900 sm:rounded-[2rem] sm:p-6" onMouseDown={(event) => event.stopPropagation()}>
-          <div className="flex items-start justify-between gap-4">
-            <div><p className="text-xs font-black uppercase tracking-[.15em] text-blue-600 dark:text-cyan-400">Regola personale</p><h2 className="mt-2 text-2xl font-black">Modifica classificazione automatica</h2></div>
-            <button type="button" onClick={() => setEditingRule(null)} className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800"><X className="h-4 w-4" /></button>
-          </div>
-          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">La modifica vale per i movimenti importati in futuro. Quelli già classificati non vengono riscritti.</p>
-          <div className="mt-5 space-y-4">
-            <label className="block"><span className="mb-1.5 block text-sm font-bold">Testo da riconoscere</span><Input value={editingRule.pattern} onChange={(event) => setEditingRule({ ...editingRule, pattern: event.target.value })} className="rounded-xl" /></label>
-            <label className="block"><span className="mb-1.5 block text-sm font-bold">Nome esercente</span><Input value={editingRule.normalized_merchant || ""} onChange={(event) => setEditingRule({ ...editingRule, normalized_merchant: event.target.value })} className="rounded-xl" /></label>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-bold">Categoria</span>
-              <select
-                value={editingRule.category_id || ""}
-                onChange={(event) => {
-                  const category = ruleTaxonomy.categories.find(
-                    (item) => item.id === event.target.value,
-                  );
-                  setEditingRule({
-                    ...editingRule,
-                    category: category?.name || "",
-                    category_id: category?.id || null,
-                    subcategory_id: null,
-                    microcategory_id: null,
-                    microcategoryChoice: "__omit__",
-                    remember_microcategory: false,
-                  });
-                }}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950"
+        <div
+          className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          onMouseDown={() => setEditingRule(null)}
+        >
+          <section
+            className="w-full max-w-lg rounded-t-[2rem] bg-white p-5 shadow-2xl dark:bg-slate-900 sm:rounded-[2rem] sm:p-6"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[.15em] text-blue-600 dark:text-cyan-400">
+                  Regola personale
+                </p>
+                <h2 className="mt-2 text-2xl font-black">
+                  Modifica classificazione automatica
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRule(null)}
+                className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800"
               >
-                <option value="">Nessuna categoria</option>
-                {ruleTaxonomy.categories.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.icon || "•"} {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-bold">Sottocategoria</span>
-              <select
-                value={editingRule.subcategory_id || ""}
-                disabled={!editingRule.category_id}
-                onChange={(event) =>
-                  setEditingRule({
-                    ...editingRule,
-                    subcategory_id: event.target.value || null,
-                    microcategory_id: null,
-                    microcategoryChoice: "__omit__",
-                    remember_microcategory: false,
-                  })
-                }
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
-              >
-                <option value="">Nessuna sottocategoria</option>
-                {ruleTaxonomy.subcategories
-                  .filter(
-                    (item) => item.category_id === editingRule.category_id,
-                  )
-                  .map((item) => (
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+              La modifica vale per i movimenti importati in futuro. Quelli già
+              classificati non vengono riscritti.
+            </p>
+            <div className="mt-5 space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Testo da riconoscere
+                </span>
+                <Input
+                  value={editingRule.pattern}
+                  onChange={(event) =>
+                    setEditingRule({
+                      ...editingRule,
+                      pattern: event.target.value,
+                    })
+                  }
+                  className="rounded-xl"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Nome esercente
+                </span>
+                <Input
+                  value={editingRule.normalized_merchant || ""}
+                  onChange={(event) =>
+                    setEditingRule({
+                      ...editingRule,
+                      normalized_merchant: event.target.value,
+                    })
+                  }
+                  className="rounded-xl"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Categoria
+                </span>
+                <select
+                  value={editingRule.category_id || ""}
+                  onChange={(event) => {
+                    const category = ruleTaxonomy.categories.find(
+                      (item) => item.id === event.target.value,
+                    );
+                    setEditingRule({
+                      ...editingRule,
+                      category: category?.name || "",
+                      category_id: category?.id || null,
+                      subcategory_id: null,
+                      microcategory_id: null,
+                      microcategoryChoice: "__omit__",
+                      remember_microcategory: false,
+                    });
+                  }}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <option value="">Nessuna categoria</option>
+                  {ruleTaxonomy.categories.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.icon || "•"} {item.name}
                     </option>
                   ))}
-              </select>
-            </label>
+                </select>
+              </label>
 
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-bold">Microcategoria</span>
-              <select
-                value={editingRule.microcategoryChoice || "__omit__"}
-                disabled={!editingRule.subcategory_id}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setEditingRule({
-                    ...editingRule,
-                    microcategoryChoice: value,
-                    microcategory_id: value === "__omit__" ? null : value,
-                    remember_microcategory: value !== "__omit__",
-                  });
-                }}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Sottocategoria
+                </span>
+                <select
+                  value={editingRule.subcategory_id || ""}
+                  disabled={!editingRule.category_id}
+                  onChange={(event) =>
+                    setEditingRule({
+                      ...editingRule,
+                      subcategory_id: event.target.value || null,
+                      microcategory_id: null,
+                      microcategoryChoice: "__omit__",
+                      remember_microcategory: false,
+                    })
+                  }
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <option value="">Nessuna sottocategoria</option>
+                  {ruleTaxonomy.subcategories
+                    .filter(
+                      (item) => item.category_id === editingRule.category_id,
+                    )
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.icon || "•"} {item.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold">
+                  Microcategoria
+                </span>
+                <select
+                  value={editingRule.microcategoryChoice || "__omit__"}
+                  disabled={!editingRule.subcategory_id}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setEditingRule({
+                      ...editingRule,
+                      microcategoryChoice: value,
+                      microcategory_id: value === "__omit__" ? null : value,
+                      remember_microcategory: value !== "__omit__",
+                    });
+                  }}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <option value="__omit__">Non inserire</option>
+                  {ruleTaxonomy.microcategories
+                    .filter(
+                      (item) =>
+                        !item.subcategory_id ||
+                        item.subcategory_id === editingRule.subcategory_id,
+                    )
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.icon || "•"} {item.name}
+                      </option>
+                    ))}
+                </select>
+                <small className="mt-1.5 block text-slate-400">
+                  “Non inserire” applica categoria e sottocategoria ma lascia la
+                  microcategoria vuota, quindi non viene conteggiata nei
+                  relativi grafici.
+                </small>
+              </label>
+              <label className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/55">
+                <input
+                  type="checkbox"
+                  checked={editingRule.active}
+                  onChange={(event) =>
+                    setEditingRule({
+                      ...editingRule,
+                      active: event.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  <b className="block text-sm">Regola attiva</b>
+                  <small className="text-slate-400">
+                    Se disattivata, i nuovi movimenti non vengono classificati
+                    automaticamente.
+                  </small>
+                </span>
+              </label>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditingRule(null)}
+                className="h-11 rounded-xl"
               >
-                <option value="__omit__">Non inserire</option>
-                {ruleTaxonomy.microcategories
-                  .filter(
-                    (item) =>
-                      !item.subcategory_id ||
-                      item.subcategory_id === editingRule.subcategory_id,
-                  )
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.icon || "•"} {item.name}
-                    </option>
-                  ))}
-              </select>
-              <small className="mt-1.5 block text-slate-400">
-                “Non inserire” applica categoria e sottocategoria ma lascia la
-                microcategoria vuota, quindi non viene conteggiata nei relativi grafici.
-              </small>
-            </label>
-            <label className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/55"><input type="checkbox" checked={editingRule.active} onChange={(event) => setEditingRule({ ...editingRule, active: event.target.checked })} /><span><b className="block text-sm">Regola attiva</b><small className="text-slate-400">Se disattivata, i nuovi movimenti non vengono classificati automaticamente.</small></span></label>
-          </div>
-          <div className="mt-6 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setEditingRule(null)} className="h-11 rounded-xl">Annulla</Button><Button onClick={saveEditedRule} disabled={savingRule} className="h-11 rounded-xl">{savingRule ? "Salvataggio..." : "Salva regola"}</Button></div>
-        </section>
-      </div>
+                Annulla
+              </Button>
+              <Button
+                onClick={saveEditedRule}
+                disabled={savingRule}
+                className="h-11 rounded-xl"
+              >
+                {savingRule ? "Salvataggio..." : "Salva regola"}
+              </Button>
+            </div>
+          </section>
+        </div>
       )}
 
-
       <Modal open={!!reviewItem} onClose={() => setReviewItem(null)} wide>
-      {reviewItem && (
+        {reviewItem && (
           <TransactionDetailsEditor
             key={reviewItem.id}
             transaction={reviewItem}
@@ -1984,7 +2377,7 @@ function TxRow({ t, onReview, onEdit, onDelete }) {
       >
         <Edit3 size={16} />
       </button>
-      {t.review_status !== "verified" && (
+      {needsClassification(t) && (
         <button
           onClick={onReview}
           className="rounded-lg bg-orange-100 p-2 text-orange-700"

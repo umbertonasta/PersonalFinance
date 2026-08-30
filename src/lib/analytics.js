@@ -1,5 +1,20 @@
 import { inRange } from "@/lib/dateRanges";
 
+export function needsClassification(item) {
+  return (
+    item?.type === "expense" &&
+    (item.review_status !== "verified" || !item.category_id)
+  );
+}
+
+export function isClassifiedExpense(item) {
+  return (
+    item?.type === "expense" &&
+    item.review_status === "verified" &&
+    Boolean(item.category_id)
+  );
+}
+
 const DAY_NAMES = [
   "Domenica",
   "Lunedi",
@@ -107,7 +122,7 @@ export function buildChangeDrivers(
     const totals = new Map();
     if (!selectedRange) return totals;
     expenseRows(transactions, selectedRange).forEach((item) => {
-      const key = item.category_id || "pending";
+      const key = needsClassification(item) ? "pending" : item.category_id;
       totals.set(key, (totals.get(key) || 0) + Number(item.amount));
     });
     return totals;
@@ -132,7 +147,8 @@ export function buildChangeDrivers(
           ? ((currentValue - comparisonValue) / comparisonValue) * 100
           : null,
         rows: expenseRows(transactions, range).filter(
-          (item) => (item.category_id || "pending") === key,
+          (item) =>
+            (needsClassification(item) ? "pending" : item.category_id) === key,
         ),
       };
     })
