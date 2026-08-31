@@ -1185,11 +1185,11 @@ function App() {
       </div>
     );
   return (
-    <div className="h-[100dvh] w-full max-w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10)_0,_transparent_24%),linear-gradient(to_bottom,_#f8fafc,_#eef2f7)] text-slate-950 transition-colors duration-300 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(52,211,153,0.11)_0,_transparent_25%),linear-gradient(to_bottom,_#070b14,_#0b1220)] dark:text-slate-100">
-      <div className="mx-auto h-full w-full min-w-0 max-w-7xl overflow-x-hidden overflow-y-auto px-3 pb-24 pt-3 [overscroll-behavior-y:contain] sm:px-6 sm:pb-6 sm:pt-5">
-        <header className="mb-5 flex min-w-0 flex-col items-stretch gap-3 sm:mb-7 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between rounded-[1.25rem] border border-white/70 bg-white/70 p-3 sm:rounded-[1.75rem] sm:p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/65 dark:shadow-black/20">
+    <div className="h-[100dvh] w-full max-w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10)_0,_transparent_24%),linear-gradient(to_bottom,_#f8fafc,_#eef2f7)] pb-24 text-slate-950 transition-colors duration-300 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(52,211,153,0.11)_0,_transparent_25%),linear-gradient(to_bottom,_#070b14,_#0b1220)] dark:text-slate-100">
+      <div className="mx-auto h-full w-full min-w-0 max-w-7xl overflow-x-hidden overflow-y-auto px-3 pb-28 pt-4 [overscroll-behavior-y:contain] sm:px-6 sm:pb-6 sm:pt-5">
+        <header className="mb-5 flex min-w-0 flex-col items-stretch gap-3 sm:mb-7 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between rounded-[1.75rem] border border-white/70 bg-white/70 p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/65 dark:shadow-black/20">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-600/20 dark:from-emerald-400 dark:to-cyan-500 dark:text-slate-950 dark:shadow-emerald-500/20">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-600/20 dark:from-emerald-400 dark:to-cyan-500 dark:text-slate-950 dark:shadow-emerald-500/20">
               <Landmark />
             </div>
             <div className="min-w-0">
@@ -1667,7 +1667,7 @@ function App() {
       </div>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 px-2 pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 px-2 pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 sm:hidden"
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         aria-label="Navigazione mobile"
       >

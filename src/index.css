@@ -779,25 +779,24 @@ body {
   background: linear-gradient(90deg, var(--tech-cyan), var(--tech-violet));
 }
 
-/* Compact dashboard navigator inside the mobile viewport. */
+/* Keep global theme and session controls clear of the mobile bottom navigation. */
 @media (max-width: 640px) {
-  .dashboard-nav {
-    position: static;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    width: 100%;
-    max-width: 100%;
-    overflow: hidden;
-    gap: 0.2rem;
-    border-radius: 1rem;
+  .floating-controls {
+    z-index: 35;
+    right: 0.75rem;
+    bottom: calc(5.75rem + env(safe-area-inset-bottom));
   }
 
-  .dashboard-nav button {
-    min-width: 0;
-    overflow: hidden;
-    padding: 0.62rem 0.25rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.66rem;
+  .floating-controls .theme-switch,
+  .floating-controls .logout-button {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border-radius: 0.9rem;
+  }
+
+  .floating-controls .logout-button span {
+    display: none;
   }
 }
