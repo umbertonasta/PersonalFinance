@@ -1185,15 +1185,15 @@ function App() {
       </div>
     );
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10)_0,_transparent_24%),linear-gradient(to_bottom,_#f8fafc,_#eef2f7)] pb-24 text-slate-950 transition-colors duration-300 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(52,211,153,0.11)_0,_transparent_25%),linear-gradient(to_bottom,_#070b14,_#0b1220)] dark:text-slate-100">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6">
-        <header className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/65 dark:shadow-black/20">
-          <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-600/20 dark:from-emerald-400 dark:to-cyan-500 dark:text-slate-950 dark:shadow-emerald-500/20">
+    <div className="h-[100dvh] w-full max-w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10)_0,_transparent_24%),linear-gradient(to_bottom,_#f8fafc,_#eef2f7)] text-slate-950 transition-colors duration-300 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(52,211,153,0.11)_0,_transparent_25%),linear-gradient(to_bottom,_#070b14,_#0b1220)] dark:text-slate-100">
+      <div className="mx-auto h-full w-full min-w-0 max-w-7xl overflow-x-hidden overflow-y-auto px-3 pb-24 pt-3 [overscroll-behavior-y:contain] sm:px-6 sm:pb-6 sm:pt-5">
+        <header className="mb-5 flex min-w-0 flex-col items-stretch gap-3 sm:mb-7 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between rounded-[1.25rem] border border-white/70 bg-white/70 p-3 sm:rounded-[1.75rem] sm:p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/65 dark:shadow-black/20">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-600/20 dark:from-emerald-400 dark:to-cyan-500 dark:text-slate-950 dark:shadow-emerald-500/20">
               <Landmark />
             </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-black sm:text-2xl tracking-tight text-slate-950 dark:text-white">
                 Il mio patrimonio
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -1201,7 +1201,7 @@ function App() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="hidden gap-2 sm:flex">
             <Button
               variant="outline"
               className="rounded-2xl bg-white/70"
@@ -1238,8 +1238,8 @@ function App() {
             </Button>
           </div>
         </header>
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap rounded-2xl bg-white/70 p-1 shadow-sm">
+        <div className="mb-5 flex min-w-0 flex-col items-stretch gap-3 sm:mb-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="hidden flex-wrap rounded-2xl bg-white/70 p-1 shadow-sm sm:flex">
             {[
               ["dashboard", "Panoramica", Wallet],
               [
@@ -1260,14 +1260,14 @@ function App() {
               </button>
             ))}
           </div>
-          <div className="flex items-center rounded-2xl bg-white/70 p-1 shadow-sm">
+          <div className="flex w-full min-w-0 items-center justify-between rounded-2xl bg-white/70 p-1 shadow-sm sm:w-auto">
             <button
               className="p-2"
               onClick={() => setMonth(shiftMonth(month, -1))}
             >
               <ChevronLeft size={18} />
             </button>
-            <b className="min-w-40 text-center capitalize">
+            <b className="min-w-0 flex-1 px-2 text-center capitalize sm:min-w-40">
               {labelMonth(month)}
             </b>
             <button
@@ -1665,6 +1665,23 @@ function App() {
           </motion.main>
         )}
       </div>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 px-2 pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 sm:hidden"
+        style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+        aria-label="Navigazione mobile"
+      >
+        <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
+          <MobileNavButton active={tab === "dashboard"} icon={Wallet} label="Home" onClick={() => setTab("dashboard")} />
+          <MobileNavButton active={tab === "movements"} icon={BarChart3} label="Movimenti" onClick={() => setTab("movements")} />
+          <button type="button" onClick={openNewMovement} className="-mt-7 flex flex-col items-center gap-1" aria-label="Aggiungi movimento">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white shadow-lg dark:bg-emerald-400 dark:text-slate-950"><Plus size={25} /></span>
+            <span className="text-[10px] font-black text-slate-600 dark:text-slate-300">Aggiungi</span>
+          </button>
+          <MobileNavButton active={tab === "inbox"} icon={Inbox} label={pending.length ? `Limbo ${pending.length}` : "Limbo"} onClick={() => setTab("inbox")} />
+          <MobileNavButton active={tab === "settings"} icon={Settings2} label="Altro" onClick={() => setTab("settings")} />
+        </div>
+      </nav>
 
       <Modal
         open={txModal}
@@ -2410,6 +2427,15 @@ function SystemCard({ icon: Icon, title, status, text }) {
     </Card>
   );
 }
+function MobileNavButton({ active, icon: Icon, label, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-black ${active ? "bg-slate-100 text-slate-950 dark:bg-slate-800 dark:text-white" : "text-slate-400"}`}>
+      <Icon size={20} />
+      <span className="max-w-full truncate">{label}</span>
+    </button>
+  );
+}
+
 function ModalHead({ title, close }) {
   return (
     <div className="mb-5 flex items-center justify-between">

@@ -161,7 +161,7 @@ export default function OverviewDashboard({
     <motion.main
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
+      className="min-w-0 max-w-full space-y-4 overflow-x-hidden"
     >
       <PeriodSelector
         preset={periodPreset}
@@ -191,7 +191,7 @@ export default function OverviewDashboard({
       )}
       <section
         id="overview"
-        className="grid scroll-mt-24 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid min-w-0 max-w-full scroll-mt-24 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
       >
         <MetricCard
           title="Entrate"
@@ -240,7 +240,7 @@ export default function OverviewDashboard({
         />
       </section>
 
-      <section className="grid items-start gap-4 xl:grid-cols-[1.55fr_.85fr]">
+      <section className="grid min-w-0 max-w-full items-start gap-4 xl:grid-cols-[1.55fr_.85fr]">
         <DashboardPanel
           title="Il ritmo del tuo denaro"
           subtitle={`Entrate e spese · ${range.label}`}
@@ -473,7 +473,7 @@ export default function OverviewDashboard({
         </p>
       </div>
 
-      <section className="grid items-start gap-4 xl:grid-cols-2">
+      <section className="grid min-w-0 max-w-full items-start gap-4 xl:grid-cols-2">
         <DashboardPanel
           title="Entrate - Categorie"
           subtitle="Distribuzione delle entrate per categoria"
@@ -644,7 +644,7 @@ export default function OverviewDashboard({
           Ritmi settimanali, momenti del mese e distribuzione degli importi.
         </p>
       </div>
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className="grid min-w-0 max-w-full gap-4 xl:grid-cols-2">
         <WeekendComparison
           transactions={transactions}
           range={range}
@@ -666,7 +666,7 @@ export default function OverviewDashboard({
       <div id="signals" className="scroll-mt-24" />
       <AutomaticInsights model={model} onOpen={setInsightDetail} />
 
-      <section className="grid items-start gap-4 xl:grid-cols-2">
+      <section className="grid min-w-0 max-w-full items-start gap-4 xl:grid-cols-2">
         <DashboardPanel
           title="Budget sotto controllo"
           subtitle="Quanto spazio resta questo mese"
@@ -884,7 +884,7 @@ function CategoryDetail({
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
+      <section className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[1.1fr_.9fr]">
         <DashboardPanel
           title="Sottocategorie"
           subtitle="Clicca una barra per filtrare la lista"
@@ -1150,7 +1150,7 @@ function LegendItem({ color, label, dashed = false }) {
 
 function DashboardPanel({ title, subtitle, children }) {
   return (
-    <section className="rounded-[1.75rem] border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80 sm:p-6">
+    <section className="min-w-0 max-w-full overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80 sm:p-6">
       <h2 className="text-lg font-black text-slate-950 dark:text-white">
         {title}
       </h2>
@@ -1233,7 +1233,7 @@ function ChartTooltip({ active, payload, label }) {
       {payload.map((item) => (
         <div
           key={item.dataKey || item.name}
-          className="flex min-w-32 justify-between gap-5 text-slate-500 dark:text-slate-300"
+          className="flex min-w-0 justify-between gap-3 text-slate-500 dark:text-slate-300"
         >
           <span>{item.name}</span>
           <b>{euro.format(item.value)}</b>

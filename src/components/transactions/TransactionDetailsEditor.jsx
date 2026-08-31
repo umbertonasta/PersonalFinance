@@ -216,8 +216,8 @@ export default function TransactionDetailsEditor({
     );
   }
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
+    <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-hidden">
+      <div className="flex min-w-0 items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600 dark:text-emerald-400">
             {mode === "review"
@@ -226,7 +226,7 @@ export default function TransactionDetailsEditor({
                 ? "Modifica movimento"
                 : "Nuovo movimento"}
           </p>
-          <h2 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">
+          <h2 className="mt-2 break-words text-xl font-black sm:text-2xl text-slate-950 dark:text-white">
             {mode === "review"
               ? "Dai un significato alla spesa"
               : "Dettagli del movimento"}
