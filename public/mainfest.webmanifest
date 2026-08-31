@@ -1,0 +1,24 @@
+{
+  "name": "Il mio patrimonio",
+  "short_name": "Patrimonio",
+  "description": "Gestione personale di entrate, spese e patrimonio",
+  "start_url": "/PersonalFinance/",
+  "scope": "/PersonalFinance/",
+  "display": "standalone",
+  "background_color": "#070b14",
+  "theme_color": "#070b14",
+  "icons": [
+    {
+      "src": "/PersonalFinance/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/PersonalFinance/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
