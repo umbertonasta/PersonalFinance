@@ -115,9 +115,12 @@ export function comparisonRange(
   transactions = [],
   customComparisonRange,
 ) {
-  if (mode === "none") return null;
+  if (!mode || mode === "none") return null;
 
-  if (mode.startsWith("preset:")) {
+  // "Tutto" contro "Tutto" sarebbe lo stesso identico intervallo.
+  if (range.preset === "all" && mode === "preset:all") return null;
+
+  if (String(mode).startsWith("preset:")) {
     const preset = mode.slice("preset:".length);
     return rangeFromPreset(
       preset,
