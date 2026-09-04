@@ -444,6 +444,7 @@ function App() {
   const [savingMovement, setSavingMovement] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState({});
   const [savingBudgets, setSavingBudgets] = useState(false);
+  const [newBudgetName, setNewBudgetName] = useState("");
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [toast, setToast] = useState(null);
   const [ready, setReady] = useState(false);
@@ -821,6 +822,29 @@ function App() {
         message: error.message || "Operazione non riuscita",
       });
     }
+  }
+
+  function addCustomBudget() {
+    const name = newBudgetName.trim().replace(/\s+/g, " ");
+    if (!name) {
+      setToast({ type: "error", message: "Inserisci il nome della voce" });
+      return;
+    }
+    const existingName = Object.keys(budgetDraft).find(
+      (item) => item.toLocaleLowerCase("it-IT") === name.toLocaleLowerCase("it-IT"),
+    );
+    if (existingName) {
+      setToast({ type: "error", message: "Questa voce esiste già" });
+      return;
+    }
+    setBudgetDraft((current) => ({ ...current, [name]: "" }));
+    setNewBudgetName("");
+  }
+
+  function removeCustomBudget(name) {
+    setBudgetDraft((current) =>
+      Object.fromEntries(Object.entries(current).filter(([key]) => key !== name)),
+    );
   }
 
   async function saveBudgetChanges() {
@@ -1577,36 +1601,87 @@ function App() {
             <div className="self-start">
               <Panel
                 title="Budget mensili"
-                subtitle="Imposta i limiti e salvali nel cloud"
+                subtitle="Crea voci personalizzate e salvale nel cloud"
               >
-                <div className="space-y-3">
-                  {CATEGORIES.filter((item) => item.name !== "Altro").map(
-                    (item) => (
-                      <label
-                        key={item.name}
-                        className="flex items-center gap-3"
-                      >
-                        <span className="min-w-32 text-sm font-bold">
-                          {item.icon} {item.name}
-                        </span>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={budgetDraft[item.name] ?? ""}
-                          onChange={(event) =>
-                            setBudgetDraft((current) => ({
-                              ...current,
-                              [item.name]: event.target.value,
-                            }))
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                    <label className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">
+                      Nuova voce
+                    </label>
+                    <div className="flex min-w-0 gap-2">
+                      <Input
+                        value={newBudgetName}
+                        onChange={(event) => setNewBudgetName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addCustomBudget();
                           }
-                          placeholder="Nessun limite"
-                          className="rounded-xl"
-                        />
-                      </label>
-                    ),
+                        }}
+                        placeholder="Es. Benzina, Fondo emergenza..."
+                        className="min-w-0 flex-1 rounded-xl"
+                      />
+                      <Button type="button" onClick={addCustomBudget} className="shrink-0 rounded-xl px-3">
+                        <Plus className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Aggiungi</span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  {Object.keys(budgetDraft).length ? (
+                    <div className="space-y-2">
+                      {Object.entries(budgetDraft).map(([name, value]) => (
+                        <div key={name} className="grid min-w-0 grid-cols-[minmax(0,1fr)_7rem_2.5rem] items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-950">
+                          <span className="min-w-0 truncate px-1 text-sm font-bold" title={name}>
+                            {cat(name).icon} {name}
+                          </span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={value ?? ""}
+                            onChange={(event) =>
+                              setBudgetDraft((current) => ({
+                                ...current,
+                                [name]: event.target.value,
+                              }))
+                            }
+                            placeholder="0 €"
+                            aria-label={`Budget mensile ${name}`}
+                            className="min-w-0 rounded-xl text-right"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeCustomBudget(name)}
+                            className="grid h-10 w-10 place-items-center rounded-xl text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                            aria-label={`Elimina ${name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-400 dark:bg-slate-800/40">
+                      Nessuna voce. Aggiungi il primo budget mensile.
+                    </p>
                   )}
+
+                  <div className="flex items-center justify-between rounded-xl bg-blue-50 px-3 py-2 text-sm dark:bg-blue-500/10">
+                    <span className="font-bold text-blue-800 dark:text-blue-200">Totale pianificato</span>
+                    <strong className="text-blue-950 dark:text-blue-100">
+                      {euro.format(
+                        Object.values(budgetDraft).reduce(
+                          (total, value) => total + (Number(value) || 0),
+                          0,
+                        ),
+                      )}
+                    </strong>
+                  </div>
+
                   <Button
-                    className="mt-2 h-11 w-full rounded-xl bg-slate-950"
+                    className="h-11 w-full rounded-xl bg-slate-950"
                     onClick={saveBudgetChanges}
                     disabled={savingBudgets}
                   >
