@@ -50,7 +50,6 @@ import {
   deleteTransaction,
   deleteMerchantRule,
   loadFinanceData,
-  saveBudgets,
   setTransactionTags,
   updateMerchantRule,
   updateTransaction,
@@ -442,9 +441,6 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [savingMovement, setSavingMovement] = useState(false);
-  const [budgetDraft, setBudgetDraft] = useState({});
-  const [savingBudgets, setSavingBudgets] = useState(false);
-  const [newBudgetName, setNewBudgetName] = useState("");
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [toast, setToast] = useState(null);
   const [ready, setReady] = useState(false);
@@ -517,7 +513,6 @@ function App() {
       setTransactions(cloudData.transactions);
       setRules(cloudData.rules);
       setBudgets(cloudData.budgets);
-      setBudgetDraft(cloudData.budgets);
       if (cloudData.accounts.length > 0) setAccounts(cloudData.accounts);
       setDatabaseStatus("connected");
       setDatabaseMessage(
@@ -821,46 +816,6 @@ function App() {
         type: "error",
         message: error.message || "Operazione non riuscita",
       });
-    }
-  }
-
-  function addCustomBudget() {
-    const name = newBudgetName.trim().replace(/\s+/g, " ");
-    if (!name) {
-      setToast({ type: "error", message: "Inserisci il nome della voce" });
-      return;
-    }
-    const existingName = Object.keys(budgetDraft).find(
-      (item) => item.toLocaleLowerCase("it-IT") === name.toLocaleLowerCase("it-IT"),
-    );
-    if (existingName) {
-      setToast({ type: "error", message: "Questa voce esiste già" });
-      return;
-    }
-    setBudgetDraft((current) => ({ ...current, [name]: "" }));
-    setNewBudgetName("");
-  }
-
-  function removeCustomBudget(name) {
-    setBudgetDraft((current) =>
-      Object.fromEntries(Object.entries(current).filter(([key]) => key !== name)),
-    );
-  }
-
-  async function saveBudgetChanges() {
-    setSavingBudgets(true);
-    try {
-      const saved = await saveBudgets(budgetDraft);
-      setBudgets(saved);
-      setBudgetDraft(saved);
-      setToast({ type: "success", message: "Budget salvati su Supabase" });
-    } catch (error) {
-      setToast({
-        type: "error",
-        message: error.message || "Salvataggio budget non riuscito",
-      });
-    } finally {
-      setSavingBudgets(false);
     }
   }
 
@@ -1209,7 +1164,7 @@ function App() {
       </div>
     );
   return (
-    <div className="h-[100dvh] w-full max-w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10)_0,_transparent_24%),linear-gradient(to_bottom,_#f8fafc,_#eef2f7)] pb-24 text-slate-950 transition-colors duration-300 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(52,211,153,0.11)_0,_transparent_25%),linear-gradient(to_bottom,_#070b14,_#0b1220)] dark:text-slate-100">
+    <div className="h-[100dvh] w-full max-w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10)_0,_transparent_24%),linear-gradient(to_bottom,_#f8fafc,_#eef2f7)] text-slate-950 transition-colors duration-300 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16)_0,_transparent_28%),radial-gradient(circle_at_top_right,_rgba(52,211,153,0.11)_0,_transparent_25%),linear-gradient(to_bottom,_#070b14,_#0b1220)] dark:text-slate-100">
       <div className="mx-auto h-full w-full min-w-0 max-w-7xl overflow-x-hidden overflow-y-auto px-3 pb-28 pt-4 [overscroll-behavior-y:contain] sm:px-6 sm:pb-6 sm:pt-5">
         <header className="mb-5 flex min-w-0 flex-col items-stretch gap-3 sm:mb-7 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between rounded-[1.75rem] border border-white/70 bg-white/70 p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/65 dark:shadow-black/20">
           <div className="flex min-w-0 items-center gap-3">
@@ -1595,103 +1550,6 @@ function App() {
                       )}
                     </button>
                   )}
-                </div>
-              </Panel>
-            </div>
-            <div className="self-start">
-              <Panel
-                title="Budget mensili"
-                subtitle="Crea voci personalizzate e salvale nel cloud"
-              >
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
-                    <label className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">
-                      Nuova voce
-                    </label>
-                    <div className="flex min-w-0 gap-2">
-                      <Input
-                        value={newBudgetName}
-                        onChange={(event) => setNewBudgetName(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            addCustomBudget();
-                          }
-                        }}
-                        placeholder="Es. Benzina, Fondo emergenza..."
-                        className="min-w-0 flex-1 rounded-xl"
-                      />
-                      <Button type="button" onClick={addCustomBudget} className="shrink-0 rounded-xl px-3">
-                        <Plus className="h-4 w-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Aggiungi</span>
-                      </Button>
-                    </div>
-                  </div>
-
-                  {Object.keys(budgetDraft).length ? (
-                    <div className="space-y-2">
-                      {Object.entries(budgetDraft).map(([name, value]) => (
-                        <div key={name} className="grid min-w-0 grid-cols-[minmax(0,1fr)_7rem_2.5rem] items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-950">
-                          <span className="min-w-0 truncate px-1 text-sm font-bold" title={name}>
-                            {cat(name).icon} {name}
-                          </span>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            inputMode="decimal"
-                            value={value ?? ""}
-                            onChange={(event) =>
-                              setBudgetDraft((current) => ({
-                                ...current,
-                                [name]: event.target.value,
-                              }))
-                            }
-                            placeholder="0 €"
-                            aria-label={`Budget mensile ${name}`}
-                            className="min-w-0 rounded-xl text-right"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeCustomBudget(name)}
-                            className="grid h-10 w-10 place-items-center rounded-xl text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
-                            aria-label={`Elimina ${name}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-400 dark:bg-slate-800/40">
-                      Nessuna voce. Aggiungi il primo budget mensile.
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-between rounded-xl bg-blue-50 px-3 py-2 text-sm dark:bg-blue-500/10">
-                    <span className="font-bold text-blue-800 dark:text-blue-200">Totale pianificato</span>
-                    <strong className="text-blue-950 dark:text-blue-100">
-                      {euro.format(
-                        Object.values(budgetDraft).reduce(
-                          (total, value) => total + (Number(value) || 0),
-                          0,
-                        ),
-                      )}
-                    </strong>
-                  </div>
-
-                  <Button
-                    className="h-11 w-full rounded-xl bg-slate-950"
-                    onClick={saveBudgetChanges}
-                    disabled={savingBudgets}
-                  >
-                    {savingBudgets ? (
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Check className="mr-2 h-4 w-4" />
-                    )}
-                    {savingBudgets ? "Salvataggio" : "Salva budget"}
-                  </Button>
                 </div>
               </Panel>
             </div>
