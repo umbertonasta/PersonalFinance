@@ -46,6 +46,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  createInstallmentPlan,
   createTransaction,
   deleteTransaction,
   deleteMerchantRule,
@@ -445,6 +446,7 @@ function App() {
   const [toast, setToast] = useState(null);
   const [ready, setReady] = useState(false);
   const [transactions, setTransactions] = useState(seed);
+  const [installmentPlans, setInstallmentPlans] = useState([]);
   const [rules, setRules] = useState([
     {
       id: "r1",
@@ -513,6 +515,7 @@ function App() {
       setTransactions(cloudData.transactions);
       setRules(cloudData.rules);
       setBudgets(cloudData.budgets);
+      setInstallmentPlans(cloudData.installmentPlans || []);
       if (cloudData.accounts.length > 0) setAccounts(cloudData.accounts);
       setDatabaseStatus("connected");
       setDatabaseMessage(
@@ -895,7 +898,15 @@ function App() {
         microcategoryId: details.microcategoryId || null,
         notes: details.notes || null,
         recurring: details.recurring,
+        installmentPlanId: details.installment?.mode === "existing" ? details.installment.planId : null,
+        installmentNumber: details.installment?.mode === "existing" ? details.installment.installmentNumber : null,
       };
+      if (details.installment?.mode === "new") {
+        const plan = await createInstallmentPlan({ ...details.installment, expectedInstallmentAmount: details.installment.expectedInstallmentAmount || details.amount });
+        baseChanges.installmentPlanId = plan.id;
+        baseChanges.installmentNumber = 1;
+        setInstallmentPlans((current) => [...current, plan]);
+      }
 
       if (editingId) {
         const updated = await updateTransaction(editingId, baseChanges);
@@ -1265,6 +1276,7 @@ function App() {
             month={month}
             onOpenInbox={() => setTab("inbox")}
             onEditTransaction={openEditMovement}
+            installmentPlans={installmentPlans}
           />
         )}
         {tab === "inbox" && (
@@ -1633,6 +1645,7 @@ function App() {
           }
           mode="edit"
           transactions={transactions}
+          installmentPlans={installmentPlans}
           saving={savingMovement}
           onCancel={() => {
             setTxModal(false);

@@ -30,7 +30,8 @@ jobs:
           cache: npm
 
       - name: Installa le dipendenze
-        run: npm ci
+        run: npm ci --no-audit --no-fund --prefer-offline
+        timeout-minutes: 10
 
       - name: Compila il progetto
         run: npm run build
@@ -52,6 +53,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     runs-on: ubuntu-latest
+      timeout-minutes: 15
     needs: build
 
     steps:

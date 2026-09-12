@@ -1,5 +1,6 @@
 const items = [
   ["overview", "Panoramica"],
+  ["installments", "Rate"],
   ["categories", "Categorie"],
   ["habits", "Abitudini"],
   ["signals", "Segnali"],

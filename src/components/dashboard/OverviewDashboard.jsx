@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   ChevronRight,
+  CalendarDays,
   CircleDollarSign,
   Inbox,
   ReceiptText,
@@ -61,6 +62,7 @@ export default function OverviewDashboard({
   month,
   onOpenInbox,
   onEditTransaction,
+  installmentPlans = [],
 }) {
   const [taxonomy, setTaxonomy] = useState({
     categories: [],
@@ -773,6 +775,38 @@ export default function OverviewDashboard({
       />
     </motion.main>
   );
+}
+
+function InstallmentOverview({ plans, transactions }) {
+  const data = useMemo(() => {
+    const now = new Date(`${todayIso()}T12:00:00`);
+    const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() + i, 1, 12); return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("it-IT", { month: "short" }), value: 0 }; });
+    const upcoming = []; let totalRemaining = 0;
+    for (const plan of plans || []) {
+      const paid = transactions.filter((t) => t.installment_plan_id === plan.id);
+      const paidAmount = paid.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+      let remaining = Math.max(Number(plan.totalAmount) - paidAmount, 0);
+      const count = Math.max(Number(plan.totalInstallments) - paid.length, 0);
+      totalRemaining += remaining;
+      const first = new Date(`${plan.firstDueDate}T12:00:00`);
+      const regular = Number(plan.expectedInstallmentAmount) || (count ? remaining / count : 0);
+      for (let i = 0; i < count && remaining > 0; i += 1) {
+        const number = paid.length + i + 1; const due = new Date(first); due.setMonth(due.getMonth() + (number - 1) * Number(plan.frequencyMonths || 1));
+        const expectedAmount = Math.min(regular, remaining); const dueDate = due.toISOString().slice(0, 10);
+        upcoming.push({ id: `${plan.id}-${number}`, name: plan.name, number, total: plan.totalInstallments, dueDate, expectedAmount });
+        const bucket = months.find((m) => m.key === dueDate.slice(0, 7)); if (bucket) bucket.value += expectedAmount; remaining -= expectedAmount;
+      }
+    }
+    upcoming.sort((a,b) => a.dueDate.localeCompare(b.dueDate)); return { months, upcoming, totalRemaining };
+  }, [plans, transactions]);
+  if (!plans?.length) return null;
+  return <section id="installments" className="grid scroll-mt-24 gap-4 xl:grid-cols-[1.15fr_.85fr]">
+    <DashboardPanel title="Rate in arrivo" subtitle="Previsione separata dalle spese già sostenute">
+      <div className="mb-3 flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-500/10"><span className="text-sm font-bold text-violet-600">Residuo complessivo</span><strong className="text-xl">{euro.format(data.totalRemaining)}</strong></div>
+      <div className="h-48"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.months}><CartesianGrid vertical={false} opacity={0.12}/><XAxis dataKey="label" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v)} €`}/><Tooltip content={<ChartTooltip/>}/><Bar dataKey="value" name="Rate previste" fill="#8b5cf6" radius={[8,8,0,0]}/></BarChart></ResponsiveContainer></div>
+    </DashboardPanel>
+    <DashboardPanel title="Calendario rate" subtitle="Prossime scadenze stimate"><div className="max-h-72 space-y-2 overflow-y-auto">{data.upcoming.slice(0,12).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/50"><CalendarDays size={18} className="text-violet-500"/><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.name}</strong><small className="text-slate-400">Rata {item.number} di {item.total} · {new Date(`${item.dueDate}T12:00:00`).toLocaleDateString("it-IT")}</small></span><strong className="text-sm text-violet-600">{euro.format(item.expectedAmount)}</strong></div>)}</div></DashboardPanel>
+  </section>;
 }
 
 function CategoryDetail({

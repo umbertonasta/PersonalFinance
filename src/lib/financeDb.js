@@ -36,6 +36,8 @@ function fromTransactionRow(row) {
     external_id: row.external_id,
     bank_status: row.bank_status,
     recurring: Boolean(row.recurring),
+    installment_plan_id: row.installment_plan_id || null,
+    installment_number: row.installment_number == null ? null : Number(row.installment_number),
   };
 }
 
@@ -72,6 +74,8 @@ function toTransactionRow(transaction, userId) {
     external_id: transaction.external_id || null,
     bank_status: transaction.bank_status || "booked",
     recurring: Boolean(transaction.recurring),
+    installment_plan_id: transaction.installmentPlanId || transaction.installment_plan_id || null,
+    installment_number: transaction.installmentNumber || transaction.installment_number || null,
   };
 }
 
@@ -86,7 +90,7 @@ export async function checkAuthenticatedDatabase() {
 
 export async function loadFinanceData() {
   await getCurrentUser();
-  const [transactionsResult, rulesResult, budgetsResult, accountsResult] =
+  const [transactionsResult, rulesResult, budgetsResult, accountsResult, installmentPlansResult] =
     await Promise.all([
       supabase
         .from("transactions")
@@ -96,12 +100,14 @@ export async function loadFinanceData() {
       supabase.from("merchant_rules").select("*").order("created_at"),
       supabase.from("budgets").select("*").order("category"),
       supabase.from("accounts").select("*").order("created_at"),
+      supabase.from("installment_plans").select("*").order("created_at"),
     ]);
   const error = [
     transactionsResult.error,
     rulesResult.error,
     budgetsResult.error,
     accountsResult.error,
+    installmentPlansResult.error,
   ].find(Boolean);
   if (error) throw error;
 
@@ -143,6 +149,7 @@ export async function loadFinanceData() {
         Number(row.monthly_limit),
       ]),
     ),
+    installmentPlans: (installmentPlansResult.data || []).map(fromInstallmentPlanRow),
     accounts: (accountsResult.data || []).map((row) => ({
       id: row.id,
       name: row.name,
@@ -188,6 +195,10 @@ export async function updateTransaction(transactionId, changes) {
     source: "source",
     bank_status: "bank_status",
     recurring: "recurring",
+    installmentPlanId: "installment_plan_id",
+    installment_plan_id: "installment_plan_id",
+    installmentNumber: "installment_number",
+    installment_number: "installment_number",
   };
   const databaseChanges = {};
   for (const [key, column] of Object.entries(map)) {
@@ -354,4 +365,16 @@ export async function deleteMerchantRule(ruleId) {
     .delete()
     .eq("id", ruleId);
   if (error) throw error;
+}
+
+
+function fromInstallmentPlanRow(row) {
+  return { id: row.id, name: row.name, totalAmount: Number(row.total_amount), totalInstallments: Number(row.total_installments), frequencyMonths: Number(row.frequency_months || 1), firstDueDate: row.first_due_date, expectedInstallmentAmount: row.expected_installment_amount == null ? null : Number(row.expected_installment_amount), createdAt: row.created_at };
+}
+
+export async function createInstallmentPlan(plan) {
+  const user = await getCurrentUser();
+  const { data, error } = await supabase.from("installment_plans").insert({ user_id: user.id, name: String(plan.name || "").trim(), total_amount: Number(plan.totalAmount), total_installments: Number(plan.totalInstallments), frequency_months: Number(plan.frequencyMonths || 1), first_due_date: plan.firstDueDate, expected_installment_amount: plan.expectedInstallmentAmount ? Number(plan.expectedInstallmentAmount) : null }).select("*").single();
+  if (error) throw error;
+  return fromInstallmentPlanRow(data);
 }
