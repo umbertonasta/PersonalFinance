@@ -12,6 +12,7 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  Trash2,
   Wallet,
 } from "lucide-react";
 import {
@@ -63,6 +64,7 @@ export default function OverviewDashboard({
   onOpenInbox,
   onEditTransaction,
   installmentPlans = [],
+  onDeleteInstallmentPlan,
 }) {
   const [taxonomy, setTaxonomy] = useState({
     categories: [],
@@ -250,6 +252,12 @@ export default function OverviewDashboard({
           tone="violet"
         />
       </section>
+
+      <InstallmentOverview
+        plans={installmentPlans}
+        transactions={transactions}
+        onDeletePlan={onDeleteInstallmentPlan}
+      />
 
       <section className="grid items-start gap-4 xl:grid-cols-[1.55fr_.85fr]">
         <DashboardPanel
@@ -777,7 +785,7 @@ export default function OverviewDashboard({
   );
 }
 
-function InstallmentOverview({ plans, transactions }) {
+function InstallmentOverview({ plans, transactions, onDeletePlan }) {
   const data = useMemo(() => {
     const now = new Date(`${todayIso()}T12:00:00`);
     const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() + i, 1, 12); return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("it-IT", { month: "short" }), value: 0 }; });
@@ -799,13 +807,45 @@ function InstallmentOverview({ plans, transactions }) {
     }
     upcoming.sort((a,b) => a.dueDate.localeCompare(b.dueDate)); return { months, upcoming, totalRemaining };
   }, [plans, transactions]);
-  if (!plans?.length) return null;
+  if (!plans?.length) {
+    return (
+      <section id="installments" className="scroll-mt-24 rounded-[1.75rem] border border-violet-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-violet-500/20 dark:bg-slate-900/80 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"><CalendarDays size={20} /></span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-black text-slate-950 dark:text-white">Rate</h2>
+            <p className="mt-1 text-sm text-slate-400">Non ci sono ancora piani rateali configurati.</p>
+            <p className="mt-3 text-xs leading-relaxed text-slate-500 dark:text-slate-300">Modifica la prima rata già registrata oppure crea un nuovo movimento, seleziona l'etichetta Rate e scegli Prima rata. Dopo il salvataggio, qui compariranno il grafico e il calendario delle scadenze.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
   return <section id="installments" className="grid scroll-mt-24 gap-4 xl:grid-cols-[1.15fr_.85fr]">
     <DashboardPanel title="Rate in arrivo" subtitle="Previsione separata dalle spese già sostenute">
       <div className="mb-3 flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-500/10"><span className="text-sm font-bold text-violet-600">Residuo complessivo</span><strong className="text-xl">{euro.format(data.totalRemaining)}</strong></div>
       <div className="h-48"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.months}><CartesianGrid vertical={false} opacity={0.12}/><XAxis dataKey="label" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v)} €`}/><Tooltip content={<ChartTooltip/>}/><Bar dataKey="value" name="Rate previste" fill="#8b5cf6" radius={[8,8,0,0]}/></BarChart></ResponsiveContainer></div>
     </DashboardPanel>
     <DashboardPanel title="Calendario rate" subtitle="Prossime scadenze stimate"><div className="max-h-72 space-y-2 overflow-y-auto">{data.upcoming.slice(0,12).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/50"><CalendarDays size={18} className="text-violet-500"/><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.name}</strong><small className="text-slate-400">Rata {item.number} di {item.total} · {new Date(`${item.dueDate}T12:00:00`).toLocaleDateString("it-IT")}</small></span><strong className="text-sm text-violet-600">{euro.format(item.expectedAmount)}</strong></div>)}</div></DashboardPanel>
+    <div className="xl:col-span-2">
+      <DashboardPanel title="Piani rateali" subtitle="Gestisci i piani senza perdere le transazioni collegate">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {plans.map((plan) => {
+            const linked = transactions.filter((item) => item.installment_plan_id === plan.id);
+            const paid = linked.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+            return <div key={plan.id} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/50">
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm text-slate-950 dark:text-white">{plan.name}</strong>
+                <small className="text-slate-400">{linked.length}/{plan.totalInstallments} rate · pagato {euro.format(paid)} · residuo {euro.format(Math.max(Number(plan.totalAmount) - paid, 0))}</small>
+              </span>
+              <button type="button" onClick={() => onDeletePlan?.(plan)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rose-50 text-rose-600 transition hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300" aria-label={`Elimina il piano ${plan.name}`} title="Elimina piano">
+                <Trash2 size={16} />
+              </button>
+            </div>;
+          })}
+        </div>
+      </DashboardPanel>
+    </div>
   </section>;
 }
 

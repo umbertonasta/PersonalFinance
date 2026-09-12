@@ -378,3 +378,13 @@ export async function createInstallmentPlan(plan) {
   if (error) throw error;
   return fromInstallmentPlanRow(data);
 }
+
+
+export async function deleteInstallmentPlan(planId) {
+  const { data, error } = await supabase.rpc(
+    "delete_installment_plan_and_reopen_transactions",
+    { target_plan_id: planId },
+  );
+  if (error) throw error;
+  return Number(data || 0);
+}

@@ -50,6 +50,7 @@ import {
   createTransaction,
   deleteTransaction,
   deleteMerchantRule,
+  deleteInstallmentPlan,
   loadFinanceData,
   setTransactionTags,
   updateMerchantRule,
@@ -788,6 +789,41 @@ function App() {
     }
   }
 
+  function requestDeleteInstallmentPlan(plan) {
+    const linkedTransactions = transactions.filter(
+      (item) => item.installment_plan_id === plan.id,
+    );
+    setConfirmDialog({
+      title: "Eliminare il piano rateale?",
+      message: plan.name,
+      detail: `Il piano verrà eliminato, ma ${linkedTransactions.length} ${linkedTransactions.length === 1 ? "movimento verrà conservato e rimandato" : "movimenti verranno conservati e rimandati"} nel limbo. Importi, date, categorie, note e tag resteranno invariati.`,
+      confirmLabel: "Elimina piano e riapri i movimenti",
+      danger: true,
+      action: async () => {
+        const affectedCount = await deleteInstallmentPlan(plan.id);
+        setInstallmentPlans((current) =>
+          current.filter((item) => item.id !== plan.id),
+        );
+        setTransactions((current) =>
+          current.map((item) =>
+            item.installment_plan_id === plan.id
+              ? {
+                  ...item,
+                  installment_plan_id: null,
+                  installment_number: null,
+                  review_status: "needs_review",
+                }
+              : item,
+          ),
+        );
+        setToast({
+          type: "success",
+          message: `${plan.name} eliminato. ${affectedCount} ${affectedCount === 1 ? "movimento rimandato" : "movimenti rimandati"} nel limbo.`,
+        });
+      },
+    });
+  }
+
   function requestDelete(transaction) {
     setConfirmDialog({
       title: "Eliminare il movimento?",
@@ -1277,6 +1313,7 @@ function App() {
             onOpenInbox={() => setTab("inbox")}
             onEditTransaction={openEditMovement}
             installmentPlans={installmentPlans}
+            onDeleteInstallmentPlan={requestDeleteInstallmentPlan}
           />
         )}
         {tab === "inbox" && (

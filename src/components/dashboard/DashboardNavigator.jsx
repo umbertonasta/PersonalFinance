@@ -13,11 +13,11 @@ export default function DashboardNavigator() {
         <button
           key={id}
           type="button"
-          onClick={() =>
-            document
-              .getElementById(id)
-              ?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
+          onClick={() => {
+            const section = document.getElementById(id);
+            if (!section) return;
+            section.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
         >
           {label}
         </button>
