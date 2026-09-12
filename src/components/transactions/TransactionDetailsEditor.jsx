@@ -66,10 +66,14 @@ export default function TransactionDetailsEditor({
     recurring: Boolean(transaction?.recurring),
     installmentMode: transaction?.installment_plan_id ? "existing" : "new",
     installmentPlanId: transaction?.installment_plan_id || "",
-    installmentName: "", installmentTotalAmount: "", installmentTotal: "",
+    installmentName: "",
+    installmentTotalAmount: "",
+    installmentTotal: "",
     installmentFrequencyMonths: "1",
-    installmentFirstDueDate: transaction?.date || new Date().toISOString().slice(0, 10),
-    expectedInstallmentAmount: transaction?.amount == null ? "" : String(transaction.amount),
+    installmentFirstDueDate:
+      transaction?.date || new Date().toISOString().slice(0, 10),
+    expectedInstallmentAmount:
+      transaction?.amount == null ? "" : String(transaction.amount),
   });
 
   async function refreshTaxonomy() {
@@ -119,13 +123,62 @@ export default function TransactionDetailsEditor({
   const selectedCategory = taxonomy.categories.find(
     (item) => item.id === form.categoryId,
   );
-  const rateTag = taxonomy.tags.find((item) => String(item.name).trim().toLowerCase() === "rate");
-  const isInstallment = Boolean(rateTag && form.tagIds.includes(rateTag.id));
-  const activeInstallmentPlans = useMemo(() => installmentPlans.map((plan) => {
-    const rows = transactions.filter((item) => item.installment_plan_id === plan.id && item.id !== transaction?.id);
-    const paidAmount = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    return { ...plan, paidCount: rows.length, remainingAmount: Math.max(Number(plan.totalAmount) - paidAmount, 0) };
-  }).filter((plan) => plan.id === transaction?.installment_plan_id || (plan.paidCount < plan.totalInstallments && plan.remainingAmount > 0)), [installmentPlans, transactions, transaction?.id, transaction?.installment_plan_id]);
+  const normalizeTagName = (value) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+
+  const isRateTag = (tag) => {
+    const name = normalizeTagName(tag?.name);
+    return (
+      name === "rate" ||
+      name === "a rate" ||
+      name === "pagamento a rate" ||
+      name.endsWith(" rate")
+    );
+  };
+
+  const rateTag = taxonomy.tags.find(isRateTag);
+  const isInstallment = taxonomy.tags.some(
+    (tag) =>
+      isRateTag(tag) &&
+      form.tagIds.some((selectedId) => String(selectedId) === String(tag.id)),
+  );
+  const activeInstallmentPlans = useMemo(
+    () =>
+      installmentPlans
+        .map((plan) => {
+          const rows = transactions.filter(
+            (item) =>
+              item.installment_plan_id === plan.id &&
+              item.id !== transaction?.id,
+          );
+          const paidAmount = rows.reduce(
+            (sum, item) => sum + Number(item.amount || 0),
+            0,
+          );
+          return {
+            ...plan,
+            paidCount: rows.length,
+            remainingAmount: Math.max(Number(plan.totalAmount) - paidAmount, 0),
+          };
+        })
+        .filter(
+          (plan) =>
+            plan.id === transaction?.installment_plan_id ||
+            (plan.paidCount < plan.totalInstallments &&
+              plan.remainingAmount > 0),
+        ),
+    [
+      installmentPlans,
+      transactions,
+      transaction?.id,
+      transaction?.installment_plan_id,
+    ],
+  );
 
   function update(changes) {
     setForm((current) => ({ ...current, ...changes }));
@@ -185,16 +238,45 @@ export default function TransactionDetailsEditor({
       setError("Compila descrizione, data e importo.");
       return null;
     }
-    if (!form.categoryId) { setError("Seleziona una categoria."); return null; }
-    if (isInstallment && form.type !== "expense") { setError("Le rate possono essere associate solo a una spesa."); return null; }
-    if (isInstallment && form.installmentMode === "new") {
-      const totalAmount = Number(String(form.installmentTotalAmount).replace(",", "."));
-      const totalInstallments = Number(form.installmentTotal);
-      if (!form.installmentName.trim() || !totalAmount || totalAmount < amount) { setError("Inserisci nome e totale dell’acquisto. Il totale non può essere inferiore alla prima rata."); return null; }
-      if (!Number.isInteger(totalInstallments) || totalInstallments < 2) { setError("Inserisci almeno 2 rate totali."); return null; }
+    if (!form.categoryId) {
+      setError("Seleziona una categoria.");
+      return null;
     }
-    if (isInstallment && form.installmentMode === "existing" && !form.installmentPlanId) { setError("Seleziona il pagamento rateale in corso."); return null; }
-    const selectedPlan = activeInstallmentPlans.find((plan) => plan.id === form.installmentPlanId);
+    if (isInstallment && form.type !== "expense") {
+      setError("Le rate possono essere associate solo a una spesa.");
+      return null;
+    }
+    if (isInstallment && form.installmentMode === "new") {
+      const totalAmount = Number(
+        String(form.installmentTotalAmount).replace(",", "."),
+      );
+      const totalInstallments = Number(form.installmentTotal);
+      if (
+        !form.installmentName.trim() ||
+        !totalAmount ||
+        totalAmount < amount
+      ) {
+        setError(
+          "Inserisci nome e totale dell’acquisto. Il totale non può essere inferiore alla prima rata.",
+        );
+        return null;
+      }
+      if (!Number.isInteger(totalInstallments) || totalInstallments < 2) {
+        setError("Inserisci almeno 2 rate totali.");
+        return null;
+      }
+    }
+    if (
+      isInstallment &&
+      form.installmentMode === "existing" &&
+      !form.installmentPlanId
+    ) {
+      setError("Seleziona il pagamento rateale in corso.");
+      return null;
+    }
+    const selectedPlan = activeInstallmentPlans.find(
+      (plan) => plan.id === form.installmentPlanId,
+    );
     return {
       ...form,
       amount,
@@ -203,14 +285,33 @@ export default function TransactionDetailsEditor({
       category: selectedCategory?.name || null,
       remember,
       rememberMicrocategory,
-      installment: isInstallment ? (form.installmentMode === "new" ? {
-        mode: "new", name: form.installmentName.trim(),
-        totalAmount: Number(String(form.installmentTotalAmount).replace(",", ".")),
-        totalInstallments: Number(form.installmentTotal),
-        frequencyMonths: Number(form.installmentFrequencyMonths || 1),
-        firstDueDate: form.installmentFirstDueDate || form.date,
-        expectedInstallmentAmount: Number(String(form.expectedInstallmentAmount || form.amount).replace(",", ".")), installmentNumber: 1,
-      } : { mode: "existing", planId: form.installmentPlanId, installmentNumber: transaction?.installment_number || (selectedPlan ? selectedPlan.paidCount + 1 : 1) }) : null,
+      installment: isInstallment
+        ? form.installmentMode === "new"
+          ? {
+              mode: "new",
+              name: form.installmentName.trim(),
+              totalAmount: Number(
+                String(form.installmentTotalAmount).replace(",", "."),
+              ),
+              totalInstallments: Number(form.installmentTotal),
+              frequencyMonths: Number(form.installmentFrequencyMonths || 1),
+              firstDueDate: form.installmentFirstDueDate || form.date,
+              expectedInstallmentAmount: Number(
+                String(form.expectedInstallmentAmount || form.amount).replace(
+                  ",",
+                  ".",
+                ),
+              ),
+              installmentNumber: 1,
+            }
+          : {
+              mode: "existing",
+              planId: form.installmentPlanId,
+              installmentNumber:
+                transaction?.installment_number ||
+                (selectedPlan ? selectedPlan.paidCount + 1 : 1),
+            }
+        : null,
     };
   }
 
@@ -471,8 +572,21 @@ export default function TransactionDetailsEditor({
                         key={tag.id}
                         type="button"
                         onClick={() => {
-                          update({ tagIds: selected ? form.tagIds.filter((id) => id !== tag.id) : [...form.tagIds, tag.id] });
-                          if (!selected && tag.id === rateTag?.id) setShowAdvanced(true);
+                          const nextTagIds = selected
+                            ? form.tagIds.filter(
+                                (id) => String(id) !== String(tag.id),
+                              )
+                            : [...form.tagIds, tag.id];
+
+                          update({ tagIds: nextTagIds });
+
+                          if (!selected && isRateTag(tag)) {
+                            setShowAdvanced(true);
+                            localStorage.setItem(
+                              "finance-advanced-details-open",
+                              "true",
+                            );
+                          }
                         }}
                         className={`rounded-full border px-3 py-1.5 text-xs font-bold ${selected ? "border-emerald-400 bg-emerald-400/10 text-emerald-600 dark:text-emerald-300" : "border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400"}`}
                       >
@@ -492,19 +606,143 @@ export default function TransactionDetailsEditor({
                 </div>
               </Field>
 
-              {isInstallment && <div className="space-y-4 rounded-2xl border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-500/20 dark:bg-violet-500/10">
-                <div><strong className="text-sm">Pagamento a rate</strong><p className="mt-1 text-xs text-violet-700">Nelle spese conta solo l’importo della singola rata inserita.</p></div>
-                {!transaction?.installment_plan_id && <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => update({ installmentMode: "new", installmentPlanId: "" })} className={`rounded-xl border p-2 text-xs font-bold ${form.installmentMode === "new" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}>Prima rata</button>
-                  <button type="button" disabled={!activeInstallmentPlans.length} onClick={() => update({ installmentMode: "existing" })} className={`rounded-xl border p-2 text-xs font-bold disabled:opacity-40 ${form.installmentMode === "existing" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}>Rata successiva</button>
-                </div>}
-                {form.installmentMode === "existing" ? <Field label="Pagamento rateale in corso"><select value={form.installmentPlanId} onChange={(e) => update({ installmentPlanId: e.target.value })} className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"><option value="">Seleziona</option>{activeInstallmentPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {plan.paidCount}/{plan.totalInstallments} · residuo {plan.remainingAmount.toFixed(2)} €</option>)}</select></Field> : <>
-                  <Field label="Nome del piano"><Input value={form.installmentName} onChange={(e) => update({ installmentName: e.target.value })} placeholder="Es. Telefono" className="h-12" /></Field>
-                  <div className="grid grid-cols-2 gap-3"><Field label="Totale acquisto"><Input inputMode="decimal" value={form.installmentTotalAmount} onChange={(e) => update({ installmentTotalAmount: e.target.value })} placeholder="100,00" className="h-12" /></Field><Field label="Numero rate"><Input type="number" min="2" value={form.installmentTotal} onChange={(e) => update({ installmentTotal: e.target.value })} placeholder="3" className="h-12" /></Field></div>
-                  <div className="grid grid-cols-2 gap-3"><Field label="Prima scadenza"><Input type="date" value={form.installmentFirstDueDate} onChange={(e) => update({ installmentFirstDueDate: e.target.value })} className="h-12" /></Field><Field label="Frequenza"><select value={form.installmentFrequencyMonths} onChange={(e) => update({ installmentFrequencyMonths: e.target.value })} className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"><option value="1">Mensile</option><option value="2">Ogni 2 mesi</option><option value="3">Trimestrale</option></select></Field></div>
-                  <Field label="Importo rata previsto" hint="Solo per il calendario: la spesa reale usa l’importo del movimento."><Input inputMode="decimal" value={form.expectedInstallmentAmount} onChange={(e) => update({ expectedInstallmentAmount: e.target.value })} className="h-12" /></Field>
-                </>}
-              </div>}
+              {isInstallment && (
+                <div className="space-y-4 rounded-2xl border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-500/20 dark:bg-violet-500/10">
+                  <div>
+                    <strong className="text-sm">Pagamento a rate</strong>
+                    <p className="mt-1 text-xs text-violet-700">
+                      Nelle spese conta solo l’importo della singola rata
+                      inserita.
+                    </p>
+                  </div>
+                  {!transaction?.installment_plan_id && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          update({
+                            installmentMode: "new",
+                            installmentPlanId: "",
+                          })
+                        }
+                        className={`rounded-xl border p-2 text-xs font-bold ${form.installmentMode === "new" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}
+                      >
+                        Prima rata
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!activeInstallmentPlans.length}
+                        onClick={() => update({ installmentMode: "existing" })}
+                        className={`rounded-xl border p-2 text-xs font-bold disabled:opacity-40 ${form.installmentMode === "existing" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}
+                      >
+                        Rata successiva
+                      </button>
+                    </div>
+                  )}
+                  {form.installmentMode === "existing" ? (
+                    <Field label="Pagamento rateale in corso">
+                      <select
+                        value={form.installmentPlanId}
+                        onChange={(e) =>
+                          update({ installmentPlanId: e.target.value })
+                        }
+                        className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"
+                      >
+                        <option value="">Seleziona</option>
+                        {activeInstallmentPlans.map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.name} · {plan.paidCount}/
+                            {plan.totalInstallments} · residuo{" "}
+                            {plan.remainingAmount.toFixed(2)} €
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : (
+                    <>
+                      <Field label="Nome del piano">
+                        <Input
+                          value={form.installmentName}
+                          onChange={(e) =>
+                            update({ installmentName: e.target.value })
+                          }
+                          placeholder="Es. Telefono"
+                          className="h-12"
+                        />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Totale acquisto">
+                          <Input
+                            inputMode="decimal"
+                            value={form.installmentTotalAmount}
+                            onChange={(e) =>
+                              update({ installmentTotalAmount: e.target.value })
+                            }
+                            placeholder="100,00"
+                            className="h-12"
+                          />
+                        </Field>
+                        <Field label="Numero rate">
+                          <Input
+                            type="number"
+                            min="2"
+                            value={form.installmentTotal}
+                            onChange={(e) =>
+                              update({ installmentTotal: e.target.value })
+                            }
+                            placeholder="3"
+                            className="h-12"
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Prima scadenza">
+                          <Input
+                            type="date"
+                            value={form.installmentFirstDueDate}
+                            onChange={(e) =>
+                              update({
+                                installmentFirstDueDate: e.target.value,
+                              })
+                            }
+                            className="h-12"
+                          />
+                        </Field>
+                        <Field label="Frequenza">
+                          <select
+                            value={form.installmentFrequencyMonths}
+                            onChange={(e) =>
+                              update({
+                                installmentFrequencyMonths: e.target.value,
+                              })
+                            }
+                            className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"
+                          >
+                            <option value="1">Mensile</option>
+                            <option value="2">Ogni 2 mesi</option>
+                            <option value="3">Trimestrale</option>
+                          </select>
+                        </Field>
+                      </div>
+                      <Field
+                        label="Importo rata previsto"
+                        hint="Solo per il calendario: la spesa reale usa l’importo del movimento."
+                      >
+                        <Input
+                          inputMode="decimal"
+                          value={form.expectedInstallmentAmount}
+                          onChange={(e) =>
+                            update({
+                              expectedInstallmentAmount: e.target.value,
+                            })
+                          }
+                          className="h-12"
+                        />
+                      </Field>
+                    </>
+                  )}
+                </div>
+              )}
               <Field
                 label="Note"
                 question="C’è qualcosa che vorrai ricordare quando rivedrai questa spesa?"
