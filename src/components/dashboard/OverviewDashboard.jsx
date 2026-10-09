@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   ArrowUpRight,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   CalendarDays,
   CircleDollarSign,
   Inbox,
@@ -786,67 +788,251 @@ export default function OverviewDashboard({
 }
 
 function InstallmentOverview({ plans, transactions, onDeletePlan }) {
+  const [showPlans, setShowPlans] = useState(false);
   const data = useMemo(() => {
     const now = new Date(`${todayIso()}T12:00:00`);
-    const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() + i, 1, 12); return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("it-IT", { month: "short" }), value: 0 }; });
-    const upcoming = []; let totalRemaining = 0;
-    for (const plan of plans || []) {
-      const paid = transactions.filter((t) => t.installment_plan_id === plan.id);
-      const paidAmount = paid.reduce((sum, t) => sum + Number(t.amount || 0), 0);
-      let remaining = Math.max(Number(plan.totalAmount) - paidAmount, 0);
-      const count = Math.max(Number(plan.totalInstallments) - paid.length, 0);
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1, 12);
+      return {
+        key: d.toISOString().slice(0, 7),
+        label: d.toLocaleDateString("it-IT", { month: "short" }),
+        value: 0,
+      };
+    });
+    const planSummaries = (plans || []).map((plan) => {
+      const linked = transactions.filter(
+        (item) => item.installment_plan_id === plan.id,
+      );
+      const paidAmount = linked.reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+        0,
+      );
+      const totalAmount = Number(plan.totalAmount || 0);
+      const totalInstallments = Number(plan.totalInstallments || 0);
+      const remainingAmount = Math.max(totalAmount - paidAmount, 0);
+      const remainingInstallments = Math.max(
+        totalInstallments - linked.length,
+        0,
+      );
+      const completed =
+        remainingInstallments === 0 ||
+        (totalAmount > 0 && paidAmount >= totalAmount - 0.005);
+      return {
+        ...plan,
+        linked,
+        paidAmount,
+        totalAmount,
+        totalInstallments,
+        remainingAmount,
+        remainingInstallments,
+        completed,
+      };
+    });
+    const activePlans = planSummaries.filter((plan) => !plan.completed);
+    const completedPlansCount = planSummaries.length - activePlans.length;
+    const upcoming = [];
+    let totalRemaining = 0;
+    for (const plan of activePlans) {
+      const paid = plan.linked;
+      let remaining = plan.remainingAmount;
+      const count = plan.remainingInstallments;
       totalRemaining += remaining;
       const first = new Date(`${plan.firstDueDate}T12:00:00`);
-      const regular = Number(plan.expectedInstallmentAmount) || (count ? remaining / count : 0);
+      const regular =
+        Number(plan.expectedInstallmentAmount) ||
+        (count ? remaining / count : 0);
       for (let i = 0; i < count && remaining > 0; i += 1) {
-        const number = paid.length + i + 1; const due = new Date(first); due.setMonth(due.getMonth() + (number - 1) * Number(plan.frequencyMonths || 1));
-        const expectedAmount = Math.min(regular, remaining); const dueDate = due.toISOString().slice(0, 10);
-        upcoming.push({ id: `${plan.id}-${number}`, name: plan.name, number, total: plan.totalInstallments, dueDate, expectedAmount });
-        const bucket = months.find((m) => m.key === dueDate.slice(0, 7)); if (bucket) bucket.value += expectedAmount; remaining -= expectedAmount;
+        const number = paid.length + i + 1;
+        const due = new Date(first);
+        due.setMonth(
+          due.getMonth() + (number - 1) * Number(plan.frequencyMonths || 1),
+        );
+        const expectedAmount = Math.min(regular, remaining);
+        const dueDate = due.toISOString().slice(0, 10);
+        upcoming.push({
+          id: `${plan.id}-${number}`,
+          name: plan.name,
+          number,
+          total: plan.totalInstallments,
+          dueDate,
+          expectedAmount,
+        });
+        const bucket = months.find((m) => m.key === dueDate.slice(0, 7));
+        if (bucket) bucket.value += expectedAmount;
+        remaining -= expectedAmount;
       }
     }
-    upcoming.sort((a,b) => a.dueDate.localeCompare(b.dueDate)); return { months, upcoming, totalRemaining };
+    upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    return { months, upcoming, totalRemaining, activePlans, completedPlansCount };
   }, [plans, transactions]);
   if (!plans?.length) {
     return (
-      <section id="installments" className="scroll-mt-24 rounded-[1.75rem] border border-violet-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-violet-500/20 dark:bg-slate-900/80 sm:p-6">
+      <section
+        id="installments"
+        className="scroll-mt-24 rounded-[1.75rem] border border-violet-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-violet-500/20 dark:bg-slate-900/80 sm:p-6"
+      >
         <div className="flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"><CalendarDays size={20} /></span>
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+            <CalendarDays size={20} />
+          </span>
           <div className="min-w-0">
-            <h2 className="text-lg font-black text-slate-950 dark:text-white">Rate</h2>
-            <p className="mt-1 text-sm text-slate-400">Non ci sono ancora piani rateali configurati.</p>
-            <p className="mt-3 text-xs leading-relaxed text-slate-500 dark:text-slate-300">Modifica la prima rata già registrata oppure crea un nuovo movimento, seleziona l'etichetta Rate e scegli Prima rata. Dopo il salvataggio, qui compariranno il grafico e il calendario delle scadenze.</p>
+            <h2 className="text-lg font-black text-slate-950 dark:text-white">
+              Rate
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Non ci sono ancora piani rateali configurati.
+            </p>
+            <p className="mt-3 text-xs leading-relaxed text-slate-500 dark:text-slate-300">
+              Modifica la prima rata già registrata oppure crea un nuovo
+              movimento, seleziona l'etichetta Rate e scegli Prima rata. Dopo il
+              salvataggio, qui compariranno il grafico e il calendario delle
+              scadenze.
+            </p>
           </div>
         </div>
       </section>
     );
   }
-  return <section id="installments" className="grid scroll-mt-24 gap-4 xl:grid-cols-[1.15fr_.85fr]">
-    <DashboardPanel title="Rate in arrivo" subtitle="Previsione separata dalle spese già sostenute">
-      <div className="mb-3 flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-500/10"><span className="text-sm font-bold text-violet-600">Residuo complessivo</span><strong className="text-xl">{euro.format(data.totalRemaining)}</strong></div>
-      <div className="h-48"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.months}><CartesianGrid vertical={false} opacity={0.12}/><XAxis dataKey="label" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v)} €`}/><Tooltip content={<ChartTooltip/>}/><Bar dataKey="value" name="Rate previste" fill="#8b5cf6" radius={[8,8,0,0]}/></BarChart></ResponsiveContainer></div>
-    </DashboardPanel>
-    <DashboardPanel title="Calendario rate" subtitle="Prossime scadenze stimate"><div className="max-h-72 space-y-2 overflow-y-auto">{data.upcoming.slice(0,12).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/50"><CalendarDays size={18} className="text-violet-500"/><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.name}</strong><small className="text-slate-400">Rata {item.number} di {item.total} · {new Date(`${item.dueDate}T12:00:00`).toLocaleDateString("it-IT")}</small></span><strong className="text-sm text-violet-600">{euro.format(item.expectedAmount)}</strong></div>)}</div></DashboardPanel>
-    <div className="xl:col-span-2">
-      <DashboardPanel title="Piani rateali" subtitle="Gestisci i piani senza perdere le transazioni collegate">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {plans.map((plan) => {
-            const linked = transactions.filter((item) => item.installment_plan_id === plan.id);
-            const paid = linked.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-            return <div key={plan.id} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/50">
-              <span className="min-w-0 flex-1">
-                <strong className="block truncate text-sm text-slate-950 dark:text-white">{plan.name}</strong>
-                <small className="text-slate-400">{linked.length}/{plan.totalInstallments} rate · pagato {euro.format(paid)} · residuo {euro.format(Math.max(Number(plan.totalAmount) - paid, 0))}</small>
-              </span>
-              <button type="button" onClick={() => onDeletePlan?.(plan)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rose-50 text-rose-600 transition hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300" aria-label={`Elimina il piano ${plan.name}`} title="Elimina piano">
-                <Trash2 size={16} />
-              </button>
-            </div>;
-          })}
+  if (!data.activePlans.length) {
+    return (
+      <section
+        id="installments"
+        className="scroll-mt-24 rounded-[1.75rem] border border-emerald-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-emerald-500/20 dark:bg-slate-900/80 sm:p-6"
+      >
+        <h2 className="text-lg font-black text-slate-950 dark:text-white">Rate</h2>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-300">
+          Tutti i piani rateali risultano completati.
+        </p>
+        <p className="mt-2 text-xs text-slate-400">
+          {data.completedPlansCount} {data.completedPlansCount === 1 ? "piano completato è nascosto" : "piani completati sono nascosti"} dalla Home, ma restano salvati nel database.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      id="installments"
+      className="grid scroll-mt-24 gap-4 xl:grid-cols-[1.15fr_.85fr]"
+    >
+      <DashboardPanel
+        title="Rate in arrivo"
+        subtitle="Previsione separata dalle spese già sostenute"
+      >
+        <div className="mb-3 flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-500/10">
+          <span className="text-sm font-bold text-violet-600">
+            Residuo complessivo
+          </span>
+          <strong className="text-xl">
+            {euro.format(data.totalRemaining)}
+          </strong>
+        </div>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data.months}>
+              <CartesianGrid vertical={false} opacity={0.12} />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${Math.round(v)} €`}
+              />
+              <Tooltip content={<ChartTooltip />} />
+              <Bar
+                dataKey="value"
+                name="Rate previste"
+                fill="#8b5cf6"
+                radius={[8, 8, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </DashboardPanel>
-    </div>
-  </section>;
+      <DashboardPanel
+        title="Calendario rate"
+        subtitle="Prossime scadenze stimate"
+      >
+        <div className="max-h-72 space-y-2 overflow-y-auto">
+          {data.upcoming.slice(0, 12).map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/50"
+            >
+              <CalendarDays size={18} className="text-violet-500" />
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm">{item.name}</strong>
+                <small className="text-slate-400">
+                  Rata {item.number} di {item.total} ·{" "}
+                  {new Date(`${item.dueDate}T12:00:00`).toLocaleDateString(
+                    "it-IT",
+                  )}
+                </small>
+              </span>
+              <strong className="text-sm text-violet-600">
+                {euro.format(item.expectedAmount)}
+              </strong>
+            </div>
+          ))}
+        </div>
+      </DashboardPanel>
+      <div className="xl:col-span-2">
+        <DashboardPanel
+          title="Piani rateali attivi"
+          subtitle={`${data.activePlans.length} ${data.activePlans.length === 1 ? "piano in corso" : "piani in corso"}${data.completedPlansCount ? ` · ${data.completedPlansCount} completati nascosti` : ""}`}
+        >
+          <button
+            type="button"
+            onClick={() => setShowPlans((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-violet-200/70 bg-violet-50/70 px-4 py-3 text-left transition hover:border-violet-300 dark:border-violet-500/20 dark:bg-violet-500/10"
+            aria-expanded={showPlans}
+          >
+            <span>
+              <strong className="block text-sm text-slate-950 dark:text-white">
+                {showPlans ? "Nascondi i piani" : "Mostra i piani"}
+              </strong>
+              <small className="text-slate-500 dark:text-slate-300">
+                Residuo {euro.format(data.totalRemaining)} · solo piani ancora da pagare
+              </small>
+            </span>
+            {showPlans ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+
+          {showPlans && (
+            <div className="mt-3 grid max-h-[28rem] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+              {data.activePlans.map((plan) => (
+                <div
+                  key={plan.id}
+                  className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/50"
+                >
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-sm text-slate-950 dark:text-white">
+                      {plan.name}
+                    </strong>
+                    <small className="mt-1 block text-slate-500 dark:text-slate-300">
+                      Totale {euro.format(plan.totalAmount)} · {plan.linked.length}/{plan.totalInstallments} rate
+                    </small>
+                    <small className="block text-slate-400">
+                      Pagato {euro.format(plan.paidAmount)} · residuo {euro.format(plan.remainingAmount)}
+                    </small>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onDeletePlan(plan)}
+                    disabled={!onDeletePlan}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rose-50 text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-rose-500/10 dark:text-rose-300"
+                    aria-label={`Elimina il piano ${plan.name}`}
+                    title="Elimina piano"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DashboardPanel>
+      </div>
+    </section>
+  );
 }
 
 function CategoryDetail({

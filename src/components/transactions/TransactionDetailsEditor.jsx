@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleHelp,
+  CreditCard,
   LoaderCircle,
   Plus,
   Tag,
@@ -64,6 +65,7 @@ export default function TransactionDetailsEditor({
     tagIds: transaction?.tag_ids || [],
     notes: transaction?.notes || "",
     recurring: Boolean(transaction?.recurring),
+    paymentMethod: transaction?.installment_plan_id ? "installment" : "normal",
     installmentMode: transaction?.installment_plan_id ? "existing" : "new",
     installmentPlanId: transaction?.installment_plan_id || "",
     installmentName: "",
@@ -142,11 +144,25 @@ export default function TransactionDetailsEditor({
   };
 
   const rateTag = taxonomy.tags.find(isRateTag);
-  const isInstallment = taxonomy.tags.some(
-    (tag) =>
-      isRateTag(tag) &&
-      form.tagIds.some((selectedId) => String(selectedId) === String(tag.id)),
-  );
+  const isInstallment = form.paymentMethod === "installment";
+  useEffect(() => {
+    if (!rateTag) return;
+    setForm((current) => {
+      const selected = current.tagIds.some(
+        (id) => String(id) === String(rateTag.id),
+      );
+      if (current.paymentMethod === "installment" && !selected) {
+        return { ...current, tagIds: [...new Set([...current.tagIds, rateTag.id])] };
+      }
+      if (current.paymentMethod === "normal" && selected) {
+        return {
+          ...current,
+          tagIds: current.tagIds.filter((id) => String(id) !== String(rateTag.id)),
+        };
+      }
+      return current;
+    });
+  }, [rateTag?.id, form.paymentMethod]);
   const activeInstallmentPlans = useMemo(
     () =>
       installmentPlans
@@ -180,8 +196,56 @@ export default function TransactionDetailsEditor({
     ],
   );
 
+  const selectedInstallmentPlan = activeInstallmentPlans.find(
+    (plan) => plan.id === form.installmentPlanId,
+  );
+  const firstPlanRate = useMemo(() => {
+    if (!selectedInstallmentPlan) return null;
+    return transactions
+      .filter((item) => item.installment_plan_id === selectedInstallmentPlan.id && item.id !== transaction?.id)
+      .sort((a, b) => Number(a.installment_number || 9999) - Number(b.installment_number || 9999))[0] || null;
+  }, [selectedInstallmentPlan, transactions, transaction?.id]);
+  const planClassification = firstPlanRate?.category_id
+    ? {
+        categoryId: firstPlanRate.category_id,
+        subcategoryId: firstPlanRate.subcategory_id || "",
+        microcategoryId: firstPlanRate.microcategory_id || "",
+      }
+    : null;
+  const classificationDiffers = Boolean(
+    planClassification &&
+      (String(form.categoryId || "") !== String(planClassification.categoryId || "") ||
+        String(form.subcategoryId || "") !== String(planClassification.subcategoryId || "") ||
+        String(form.microcategoryId || "") !== String(planClassification.microcategoryId || "")),
+  );
+
   function update(changes) {
     setForm((current) => ({ ...current, ...changes }));
+  }
+  function choosePaymentMethod(paymentMethod) {
+    update({
+      paymentMethod,
+      ...(paymentMethod === "normal"
+        ? { installmentMode: "new", installmentPlanId: "" }
+        : {}),
+    });
+    if (paymentMethod === "installment") {
+      setShowAdvanced(true);
+      localStorage.setItem("finance-advanced-details-open", "true");
+    }
+  }
+  function chooseInstallmentPlan(planId) {
+    const plan = activeInstallmentPlans.find((item) => item.id === planId);
+    const firstRate = transactions
+      .filter((item) => item.installment_plan_id === planId && item.id !== transaction?.id)
+      .sort((a, b) => Number(a.installment_number || 9999) - Number(b.installment_number || 9999))[0];
+    update({
+      installmentPlanId: planId,
+      description: form.description || plan?.name || "",
+      categoryId: firstRate?.category_id || form.categoryId,
+      subcategoryId: firstRate?.subcategory_id || "",
+      microcategoryId: firstRate?.microcategory_id || "",
+    });
   }
 
   async function createQuickItem() {
@@ -470,6 +534,41 @@ export default function TransactionDetailsEditor({
               />
             </Field>
           </div>
+          {form.type === "expense" && (
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/45">
+              <div>
+                <strong className="text-sm text-slate-950 dark:text-white">Come vuoi registrare questa spesa?</strong>
+                <p className="mt-1 text-xs text-slate-400">Scegli subito il tipo di pagamento.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => choosePaymentMethod("normal")} className={`rounded-xl border p-3 text-left transition ${form.paymentMethod === "normal" ? "border-blue-500 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"}`}>
+                  <strong className="block text-sm">Pagamento normale</strong>
+                  <small className="mt-1 block opacity-80">Spesa singola</small>
+                </button>
+                <button type="button" onClick={() => choosePaymentMethod("installment")} className={`rounded-xl border p-3 text-left transition ${isInstallment ? "border-violet-500 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"}`}>
+                  <CreditCard size={16} className="mb-1" />
+                  <strong className="block text-sm">Pagamento a rate</strong>
+                  <small className="mt-1 block opacity-80">Nuovo piano o rata successiva</small>
+                </button>
+              </div>
+              {isInstallment && !transaction?.installment_plan_id && (
+                <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/80 p-3 dark:border-violet-500/20 dark:bg-violet-500/10">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => update({ installmentMode: "new", installmentPlanId: "" })} className={`rounded-xl border p-2 text-xs font-black ${form.installmentMode === "new" ? "bg-violet-600 text-white" : "bg-white text-violet-700 dark:bg-slate-950"}`}>Prima rata</button>
+                    <button type="button" disabled={!activeInstallmentPlans.length} onClick={() => update({ installmentMode: "existing" })} className={`rounded-xl border p-2 text-xs font-black disabled:opacity-40 ${form.installmentMode === "existing" ? "bg-violet-600 text-white" : "bg-white text-violet-700 dark:bg-slate-950"}`}>Rata successiva</button>
+                  </div>
+                  {form.installmentMode === "existing" && (
+                    <select value={form.installmentPlanId} onChange={(event) => chooseInstallmentPlan(event.target.value)} className="h-12 w-full rounded-xl border border-violet-200 bg-white px-3 dark:bg-slate-950">
+                      <option value="">Seleziona il piano in corso</option>
+                      {activeInstallmentPlans.map((plan) => (
+                        <option key={plan.id} value={plan.id}>{plan.name} · totale {Number(plan.totalAmount || 0).toFixed(2)} € · {plan.paidCount}/{plan.totalInstallments} · residuo {plan.remainingAmount.toFixed(2)} €</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <Field label="Descrizione">
             <Input
               value={form.description}
@@ -519,6 +618,27 @@ export default function TransactionDetailsEditor({
             onAdd={() => setQuick({ ...emptyQuick, type: "subcategory" })}
           />
 
+          {isInstallment && form.installmentMode === "existing" && selectedInstallmentPlan && (
+            <div className={`rounded-2xl border p-4 ${classificationDiffers ? "border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10" : "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10"}`}>
+              <strong className="text-sm text-slate-950 dark:text-white">Classificazione usata nella prima rata</strong>
+              {planClassification ? (
+                <>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                    {taxonomy.categories.find((item) => item.id === planClassification.categoryId)?.name || "Categoria"}
+                    {planClassification.subcategoryId ? ` → ${taxonomy.subcategories.find((item) => item.id === planClassification.subcategoryId)?.name || "Sottocategoria"}` : ""}
+                    {planClassification.microcategoryId ? ` → ${taxonomy.microcategories.find((item) => item.id === planClassification.microcategoryId)?.name || "Microcategoria"}` : ""}
+                  </p>
+                  {classificationDiffers ? (
+                    <button type="button" onClick={() => update(planClassification)} className="mt-3 rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white">Usa la classificazione del piano</button>
+                  ) : (
+                    <small className="mt-2 block text-emerald-700 dark:text-emerald-300">Classificazione applicata automaticamente.</small>
+                  )}
+                </>
+              ) : (
+                <small className="mt-2 block text-slate-500">Nessuna classificazione completa trovata nelle rate precedenti.</small>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -651,8 +771,9 @@ export default function TransactionDetailsEditor({
                         <option value="">Seleziona</option>
                         {activeInstallmentPlans.map((plan) => (
                           <option key={plan.id} value={plan.id}>
-                            {plan.name} · {plan.paidCount}/
-                            {plan.totalInstallments} · residuo{" "}
+                            {plan.name} · totale{" "}
+                            {Number(plan.totalAmount || 0).toFixed(2)} € ·{" "}
+                            {plan.paidCount}/{plan.totalInstallments} · residuo{" "}
                             {plan.remainingAmount.toFixed(2)} €
                           </option>
                         ))}

@@ -381,10 +381,29 @@ export async function createInstallmentPlan(plan) {
 
 
 export async function deleteInstallmentPlan(planId) {
-  const { data, error } = await supabase.rpc(
-    "delete_installment_plan_and_reopen_transactions",
-    { target_plan_id: planId },
-  );
-  if (error) throw error;
-  return Number(data || 0);
+  await getCurrentUser();
+
+  const { data: linkedRows, error: loadError } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("installment_plan_id", planId);
+  if (loadError) throw loadError;
+
+  const { error: updateError } = await supabase
+    .from("transactions")
+    .update({
+      installment_plan_id: null,
+      installment_number: null,
+      review_status: "needs_review",
+    })
+    .eq("installment_plan_id", planId);
+  if (updateError) throw updateError;
+
+  const { error: deleteError } = await supabase
+    .from("installment_plans")
+    .delete()
+    .eq("id", planId);
+  if (deleteError) throw deleteError;
+
+  return (linkedRows || []).length;
 }

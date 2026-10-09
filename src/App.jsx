@@ -48,9 +48,9 @@ import { Input } from "@/components/ui/input";
 import {
   createInstallmentPlan,
   createTransaction,
+  deleteInstallmentPlan,
   deleteTransaction,
   deleteMerchantRule,
-  deleteInstallmentPlan,
   loadFinanceData,
   setTransactionTags,
   updateMerchantRule,
@@ -793,14 +793,16 @@ function App() {
     const linkedTransactions = transactions.filter(
       (item) => item.installment_plan_id === plan.id,
     );
+
     setConfirmDialog({
       title: "Eliminare il piano rateale?",
       message: plan.name,
-      detail: `Il piano verrà eliminato, ma ${linkedTransactions.length} ${linkedTransactions.length === 1 ? "movimento verrà conservato e rimandato" : "movimenti verranno conservati e rimandati"} nel limbo. Importi, date, categorie, note e tag resteranno invariati.`,
-      confirmLabel: "Elimina piano e riapri i movimenti",
+      detail: `Il piano verrà eliminato. ${linkedTransactions.length} ${linkedTransactions.length === 1 ? "movimento sarà conservato e rimandato" : "movimenti saranno conservati e rimandati"} nel limbo, mantenendo importo, data, categoria, note e tag.`,
+      confirmLabel: "Elimina piano",
       danger: true,
       action: async () => {
         const affectedCount = await deleteInstallmentPlan(plan.id);
+
         setInstallmentPlans((current) =>
           current.filter((item) => item.id !== plan.id),
         );
@@ -816,9 +818,10 @@ function App() {
               : item,
           ),
         );
+
         setToast({
           type: "success",
-          message: `${plan.name} eliminato. ${affectedCount} ${affectedCount === 1 ? "movimento rimandato" : "movimenti rimandati"} nel limbo.`,
+          message: `${plan.name} eliminato. ${affectedCount} ${affectedCount === 1 ? "movimento spostato" : "movimenti spostati"} nel limbo.`,
         });
       },
     });
@@ -934,11 +937,24 @@ function App() {
         microcategoryId: details.microcategoryId || null,
         notes: details.notes || null,
         recurring: details.recurring,
-        installmentPlanId: details.installment?.mode === "existing" ? details.installment.planId : null,
-        installmentNumber: details.installment?.mode === "existing" ? details.installment.installmentNumber : null,
+        suggested_category: null,
+        confidence: 1,
+        review_status: "verified",
+        installmentPlanId:
+          details.installment?.mode === "existing"
+            ? details.installment.planId
+            : null,
+        installmentNumber:
+          details.installment?.mode === "existing"
+            ? details.installment.installmentNumber
+            : null,
       };
       if (details.installment?.mode === "new") {
-        const plan = await createInstallmentPlan({ ...details.installment, expectedInstallmentAmount: details.installment.expectedInstallmentAmount || details.amount });
+        const plan = await createInstallmentPlan({
+          ...details.installment,
+          expectedInstallmentAmount:
+            details.installment.expectedInstallmentAmount || details.amount,
+        });
         baseChanges.installmentPlanId = plan.id;
         baseChanges.installmentNumber = 1;
         setInstallmentPlans((current) => [...current, plan]);
@@ -989,7 +1005,7 @@ function App() {
     if (!reviewItem) return;
     setSavingMovement(true);
     try {
-      const updated = await updateTransaction(reviewItem.id, {
+      const changes = {
         type: details.type,
         amount: details.amount,
         date: details.date,
@@ -1000,12 +1016,38 @@ function App() {
         subcategoryId: details.subcategoryId || null,
         microcategoryId: details.microcategoryId || null,
         notes: details.notes || null,
+        recurring: details.recurring,
         suggested_category: null,
         confidence: 1,
         review_status: "verified",
-      });
+        installmentPlanId:
+          details.installment?.mode === "existing"
+            ? details.installment.planId
+            : null,
+        installmentNumber:
+          details.installment?.mode === "existing"
+            ? details.installment.installmentNumber
+            : null,
+      };
+
+      let createdPlan = null;
+      if (details.installment?.mode === "new") {
+        createdPlan = await createInstallmentPlan({
+          ...details.installment,
+          expectedInstallmentAmount:
+            details.installment.expectedInstallmentAmount || details.amount,
+        });
+        changes.installmentPlanId = createdPlan.id;
+        changes.installmentNumber = 1;
+      }
+
+      const updated = await updateTransaction(reviewItem.id, changes);
       const tagIds = await setTransactionTags(reviewItem.id, details.tagIds);
       const complete = { ...updated, tag_ids: tagIds };
+
+      if (createdPlan) {
+        setInstallmentPlans((current) => [...current, createdPlan]);
+      }
       setTransactions((previous) =>
         previous.map((item) => (item.id === complete.id ? complete : item)),
       );
@@ -1043,7 +1085,9 @@ function App() {
       setReviewItem(null);
       setToast({
         type: "success",
-        message: "Transazione classificata in dettaglio",
+        message: details.installment
+          ? "Rata classificata e piano aggiornato"
+          : "Transazione classificata in dettaglio",
       });
     } catch (error) {
       setToast({
@@ -1654,14 +1698,43 @@ function App() {
         aria-label="Navigazione mobile"
       >
         <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
-          <MobileNavButton active={tab === "dashboard"} icon={Wallet} label="Home" onClick={() => setTab("dashboard")} />
-          <MobileNavButton active={tab === "movements"} icon={BarChart3} label="Movimenti" onClick={() => setTab("movements")} />
-          <button type="button" onClick={openNewMovement} className="-mt-7 flex flex-col items-center gap-1" aria-label="Aggiungi movimento">
-            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white shadow-lg dark:bg-emerald-400 dark:text-slate-950"><Plus size={25} /></span>
-            <span className="text-[10px] font-black text-slate-600 dark:text-slate-300">Aggiungi</span>
+          <MobileNavButton
+            active={tab === "dashboard"}
+            icon={Wallet}
+            label="Home"
+            onClick={() => setTab("dashboard")}
+          />
+          <MobileNavButton
+            active={tab === "movements"}
+            icon={BarChart3}
+            label="Movimenti"
+            onClick={() => setTab("movements")}
+          />
+          <button
+            type="button"
+            onClick={openNewMovement}
+            className="-mt-7 flex flex-col items-center gap-1"
+            aria-label="Aggiungi movimento"
+          >
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white shadow-lg dark:bg-emerald-400 dark:text-slate-950">
+              <Plus size={25} />
+            </span>
+            <span className="text-[10px] font-black text-slate-600 dark:text-slate-300">
+              Aggiungi
+            </span>
           </button>
-          <MobileNavButton active={tab === "inbox"} icon={Inbox} label={pending.length ? `Limbo ${pending.length}` : "Limbo"} onClick={() => setTab("inbox")} />
-          <MobileNavButton active={tab === "settings"} icon={Settings2} label="Altro" onClick={() => setTab("settings")} />
+          <MobileNavButton
+            active={tab === "inbox"}
+            icon={Inbox}
+            label={pending.length ? `Limbo ${pending.length}` : "Limbo"}
+            onClick={() => setTab("inbox")}
+          />
+          <MobileNavButton
+            active={tab === "settings"}
+            icon={Settings2}
+            label="Altro"
+            onClick={() => setTab("settings")}
+          />
         </div>
       </nav>
 
@@ -2076,6 +2149,7 @@ function App() {
             transaction={reviewItem}
             mode="review"
             transactions={transactions}
+            installmentPlans={installmentPlans}
             saving={savingMovement}
             onCancel={() => setReviewItem(null)}
             onSave={saveDetailedReview}
@@ -2412,7 +2486,11 @@ function SystemCard({ icon: Icon, title, status, text }) {
 }
 function MobileNavButton({ active, icon: Icon, label, onClick }) {
   return (
-    <button type="button" onClick={onClick} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-black ${active ? "bg-slate-100 text-slate-950 dark:bg-slate-800 dark:text-white" : "text-slate-400"}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-black ${active ? "bg-slate-100 text-slate-950 dark:bg-slate-800 dark:text-white" : "text-slate-400"}`}
+    >
       <Icon size={20} />
       <span className="max-w-full truncate">{label}</span>
     </button>
