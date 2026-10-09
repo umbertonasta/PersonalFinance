@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDownRight,
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Trash2,
   Wallet,
+  X,
 } from "lucide-react";
 import {
   Area,
@@ -789,6 +790,7 @@ export default function OverviewDashboard({
 
 function InstallmentOverview({ plans, transactions, onDeletePlan }) {
   const [showPlans, setShowPlans] = useState(false);
+  const [selectedInstallmentMonth, setSelectedInstallmentMonth] = useState(null);
   const data = useMemo(() => {
     const now = new Date(`${todayIso()}T12:00:00`);
     const months = Array.from({ length: 6 }, (_, i) => {
@@ -796,7 +798,9 @@ function InstallmentOverview({ plans, transactions, onDeletePlan }) {
       return {
         key: d.toISOString().slice(0, 7),
         label: d.toLocaleDateString("it-IT", { month: "short" }),
+        fullLabel: d.toLocaleDateString("it-IT", { month: "long", year: "numeric" }),
         value: 0,
+        installments: [],
       };
     });
     const planSummaries = (plans || []).map((plan) => {
@@ -849,22 +853,30 @@ function InstallmentOverview({ plans, transactions, onDeletePlan }) {
         );
         const expectedAmount = Math.min(regular, remaining);
         const dueDate = due.toISOString().slice(0, 10);
-        upcoming.push({
+        const installment = {
           id: `${plan.id}-${number}`,
+          planId: plan.id,
           name: plan.name,
           number,
           total: plan.totalInstallments,
           dueDate,
           expectedAmount,
-        });
+        };
+        upcoming.push(installment);
         const bucket = months.find((m) => m.key === dueDate.slice(0, 7));
-        if (bucket) bucket.value += expectedAmount;
+        if (bucket) {
+          bucket.value += expectedAmount;
+          bucket.installments.push(installment);
+        }
         remaining -= expectedAmount;
       }
     }
     upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     return { months, upcoming, totalRemaining, activePlans, completedPlansCount };
   }, [plans, transactions]);
+  const selectedMonth = data.months.find(
+    (item) => item.key === selectedInstallmentMonth,
+  );
   if (!plans?.length) {
     return (
       <section
@@ -941,9 +953,26 @@ function InstallmentOverview({ plans, transactions, onDeletePlan }) {
               <Bar
                 dataKey="value"
                 name="Rate previste"
-                fill="#8b5cf6"
                 radius={[8, 8, 0, 0]}
-              />
+                className="cursor-pointer"
+                onClick={(entry) => {
+                  if (!entry?.installments?.length) return;
+                  setSelectedInstallmentMonth(entry.key);
+                }}
+              >
+                {data.months.map((item) => (
+                  <Cell
+                    key={item.key}
+                    fill={
+                      item.key === selectedInstallmentMonth
+                        ? "#6d28d9"
+                        : "#8b5cf6"
+                    }
+                    fillOpacity={item.installments.length ? 1 : 0.3}
+                    cursor={item.installments.length ? "pointer" : "default"}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1031,6 +1060,100 @@ function InstallmentOverview({ plans, transactions, onDeletePlan }) {
           )}
         </DashboardPanel>
       </div>
+
+
+      <AnimatePresence>
+        {selectedMonth?.installments?.length > 0 && (
+          <motion.div
+            className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={() => setSelectedInstallmentMonth(null)}
+          >
+            <motion.section
+              initial={{ y: 38, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 28, opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              onMouseDown={(event) => event.stopPropagation()}
+              className="max-h-[88vh] w-full overflow-y-auto rounded-t-[2rem] border border-white/70 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-900 sm:max-w-xl sm:rounded-[2rem] sm:p-6"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="installment-month-title"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-600 dark:text-violet-300">
+                    Rate previste
+                  </p>
+                  <h2
+                    id="installment-month-title"
+                    className="mt-1 text-2xl font-black capitalize text-slate-950 dark:text-white"
+                  >
+                    {selectedMonth.fullLabel}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {selectedMonth.installments.length}{" "}
+                    {selectedMonth.installments.length === 1
+                      ? "rata in programma"
+                      : "rate in programma"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedInstallmentMonth(null)}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  aria-label="Chiudi dettaglio rate"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-2">
+                {selectedMonth.installments
+                  .slice()
+                  .sort((first, second) =>
+                    first.dueDate.localeCompare(second.dueDate),
+                  )
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3.5 dark:bg-slate-800/55"
+                    >
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+                        <CalendarDays size={18} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <strong className="block truncate text-sm text-slate-950 dark:text-white">
+                          {item.name}
+                        </strong>
+                        <small className="mt-0.5 block text-slate-400">
+                          Rata {item.number} di {item.total} · scadenza{" "}
+                          {new Date(
+                            `${item.dueDate}T12:00:00`,
+                          ).toLocaleDateString("it-IT")}
+                        </small>
+                      </span>
+                      <strong className="shrink-0 text-sm text-violet-600 dark:text-violet-300">
+                        {euro.format(item.expectedAmount)}
+                      </strong>
+                    </div>
+                  ))}
+              </div>
+
+              <div className="mt-5 flex items-center justify-between rounded-2xl bg-violet-50 px-4 py-3 dark:bg-violet-500/10">
+                <span className="text-sm font-bold text-violet-700 dark:text-violet-300">
+                  Totale previsto nel mese
+                </span>
+                <strong className="text-lg text-violet-700 dark:text-violet-300">
+                  {euro.format(selectedMonth.value)}
+                </strong>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
