@@ -515,6 +515,8 @@ export default function TransactionDetailsEditor({
                 onChange={(event) =>
                   update({
                     type: event.target.value,
+                    paymentMethod:
+                      event.target.value === "income" ? "normal" : form.paymentMethod,
                     categoryId: "",
                     subcategoryId: "",
                   })
@@ -535,35 +537,171 @@ export default function TransactionDetailsEditor({
             </Field>
           </div>
           {form.type === "expense" && (
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/45">
+            <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/45">
               <div>
-                <strong className="text-sm text-slate-950 dark:text-white">Come vuoi registrare questa spesa?</strong>
-                <p className="mt-1 text-xs text-slate-400">Scegli subito il tipo di pagamento.</p>
+                <strong className="text-sm text-slate-950 dark:text-white">
+                  Come vuoi registrare questa spesa?
+                </strong>
+                <p className="mt-1 text-xs text-slate-400">
+                  Scegli subito il tipo di pagamento.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => choosePaymentMethod("normal")} className={`rounded-xl border p-3 text-left transition ${form.paymentMethod === "normal" ? "border-blue-500 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"}`}>
+                <button
+                  type="button"
+                  onClick={() => choosePaymentMethod("normal")}
+                  className={`rounded-xl border p-3 text-left transition ${form.paymentMethod === "normal" ? "border-blue-500 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"}`}
+                >
                   <strong className="block text-sm">Pagamento normale</strong>
                   <small className="mt-1 block opacity-80">Spesa singola</small>
                 </button>
-                <button type="button" onClick={() => choosePaymentMethod("installment")} className={`rounded-xl border p-3 text-left transition ${isInstallment ? "border-violet-500 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"}`}>
+                <button
+                  type="button"
+                  onClick={() => choosePaymentMethod("installment")}
+                  className={`rounded-xl border p-3 text-left transition ${isInstallment ? "border-violet-500 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"}`}
+                >
                   <CreditCard size={16} className="mb-1" />
                   <strong className="block text-sm">Pagamento a rate</strong>
-                  <small className="mt-1 block opacity-80">Nuovo piano o rata successiva</small>
+                  <small className="mt-1 block opacity-80">
+                    Nuovo piano o rata successiva
+                  </small>
                 </button>
               </div>
-              {isInstallment && !transaction?.installment_plan_id && (
-                <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/80 p-3 dark:border-violet-500/20 dark:bg-violet-500/10">
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => update({ installmentMode: "new", installmentPlanId: "" })} className={`rounded-xl border p-2 text-xs font-black ${form.installmentMode === "new" ? "bg-violet-600 text-white" : "bg-white text-violet-700 dark:bg-slate-950"}`}>Prima rata</button>
-                    <button type="button" disabled={!activeInstallmentPlans.length} onClick={() => update({ installmentMode: "existing" })} className={`rounded-xl border p-2 text-xs font-black disabled:opacity-40 ${form.installmentMode === "existing" ? "bg-violet-600 text-white" : "bg-white text-violet-700 dark:bg-slate-950"}`}>Rata successiva</button>
+              {isInstallment && (
+                <div className="space-y-4 rounded-2xl border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-500/20 dark:bg-violet-500/10">
+                  <div>
+                    <strong className="text-sm">Pagamento a rate</strong>
+                    <p className="mt-1 text-xs text-violet-700">
+                      Nelle spese conta solo l’importo della singola rata
+                      inserita.
+                    </p>
                   </div>
-                  {form.installmentMode === "existing" && (
-                    <select value={form.installmentPlanId} onChange={(event) => chooseInstallmentPlan(event.target.value)} className="h-12 w-full rounded-xl border border-violet-200 bg-white px-3 dark:bg-slate-950">
-                      <option value="">Seleziona il piano in corso</option>
-                      {activeInstallmentPlans.map((plan) => (
-                        <option key={plan.id} value={plan.id}>{plan.name} · totale {Number(plan.totalAmount || 0).toFixed(2)} € · {plan.paidCount}/{plan.totalInstallments} · residuo {plan.remainingAmount.toFixed(2)} €</option>
-                      ))}
-                    </select>
+                  {!transaction?.installment_plan_id && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          update({
+                            installmentMode: "new",
+                            installmentPlanId: "",
+                          })
+                        }
+                        className={`rounded-xl border p-2 text-xs font-bold ${form.installmentMode === "new" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}
+                      >
+                        Prima rata
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!activeInstallmentPlans.length}
+                        onClick={() => update({ installmentMode: "existing" })}
+                        className={`rounded-xl border p-2 text-xs font-bold disabled:opacity-40 ${form.installmentMode === "existing" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}
+                      >
+                        Rata successiva
+                      </button>
+                    </div>
+                  )}
+                  {form.installmentMode === "existing" ? (
+                    <Field label="Pagamento rateale in corso">
+                      <select
+                        value={form.installmentPlanId}
+                        onChange={(e) =>
+                          update({ installmentPlanId: e.target.value })
+                        }
+                        className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"
+                      >
+                        <option value="">Seleziona</option>
+                        {activeInstallmentPlans.map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.name} · totale{" "}
+                            {Number(plan.totalAmount || 0).toFixed(2)} € ·{" "}
+                            {plan.paidCount}/{plan.totalInstallments} · residuo{" "}
+                            {plan.remainingAmount.toFixed(2)} €
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : (
+                    <>
+                      <Field label="Nome del piano">
+                        <Input
+                          value={form.installmentName}
+                          onChange={(e) =>
+                            update({ installmentName: e.target.value })
+                          }
+                          placeholder="Es. Telefono"
+                          className="h-12"
+                        />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Totale acquisto">
+                          <Input
+                            inputMode="decimal"
+                            value={form.installmentTotalAmount}
+                            onChange={(e) =>
+                              update({ installmentTotalAmount: e.target.value })
+                            }
+                            placeholder="100,00"
+                            className="h-12"
+                          />
+                        </Field>
+                        <Field label="Numero rate">
+                          <Input
+                            type="number"
+                            min="2"
+                            value={form.installmentTotal}
+                            onChange={(e) =>
+                              update({ installmentTotal: e.target.value })
+                            }
+                            placeholder="3"
+                            className="h-12"
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Prima scadenza">
+                          <Input
+                            type="date"
+                            value={form.installmentFirstDueDate}
+                            onChange={(e) =>
+                              update({
+                                installmentFirstDueDate: e.target.value,
+                              })
+                            }
+                            className="h-12"
+                          />
+                        </Field>
+                        <Field label="Frequenza">
+                          <select
+                            value={form.installmentFrequencyMonths}
+                            onChange={(e) =>
+                              update({
+                                installmentFrequencyMonths: e.target.value,
+                              })
+                            }
+                            className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"
+                          >
+                            <option value="1">Mensile</option>
+                            <option value="2">Ogni 2 mesi</option>
+                            <option value="3">Trimestrale</option>
+                          </select>
+                        </Field>
+                      </div>
+                      <Field
+                        label="Importo rata previsto"
+                        hint="Solo per il calendario: la spesa reale usa l’importo del movimento."
+                      >
+                        <Input
+                          inputMode="decimal"
+                          value={form.expectedInstallmentAmount}
+                          onChange={(e) =>
+                            update({
+                              expectedInstallmentAmount: e.target.value,
+                            })
+                          }
+                          className="h-12"
+                        />
+                      </Field>
+                    </>
                   )}
                 </div>
               )}
@@ -726,144 +864,6 @@ export default function TransactionDetailsEditor({
                 </div>
               </Field>
 
-              {isInstallment && (
-                <div className="space-y-4 rounded-2xl border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-500/20 dark:bg-violet-500/10">
-                  <div>
-                    <strong className="text-sm">Pagamento a rate</strong>
-                    <p className="mt-1 text-xs text-violet-700">
-                      Nelle spese conta solo l’importo della singola rata
-                      inserita.
-                    </p>
-                  </div>
-                  {!transaction?.installment_plan_id && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          update({
-                            installmentMode: "new",
-                            installmentPlanId: "",
-                          })
-                        }
-                        className={`rounded-xl border p-2 text-xs font-bold ${form.installmentMode === "new" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}
-                      >
-                        Prima rata
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!activeInstallmentPlans.length}
-                        onClick={() => update({ installmentMode: "existing" })}
-                        className={`rounded-xl border p-2 text-xs font-bold disabled:opacity-40 ${form.installmentMode === "existing" ? "bg-violet-600 text-white" : "bg-white text-violet-700"}`}
-                      >
-                        Rata successiva
-                      </button>
-                    </div>
-                  )}
-                  {form.installmentMode === "existing" ? (
-                    <Field label="Pagamento rateale in corso">
-                      <select
-                        value={form.installmentPlanId}
-                        onChange={(e) =>
-                          update({ installmentPlanId: e.target.value })
-                        }
-                        className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"
-                      >
-                        <option value="">Seleziona</option>
-                        {activeInstallmentPlans.map((plan) => (
-                          <option key={plan.id} value={plan.id}>
-                            {plan.name} · totale{" "}
-                            {Number(plan.totalAmount || 0).toFixed(2)} € ·{" "}
-                            {plan.paidCount}/{plan.totalInstallments} · residuo{" "}
-                            {plan.remainingAmount.toFixed(2)} €
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  ) : (
-                    <>
-                      <Field label="Nome del piano">
-                        <Input
-                          value={form.installmentName}
-                          onChange={(e) =>
-                            update({ installmentName: e.target.value })
-                          }
-                          placeholder="Es. Telefono"
-                          className="h-12"
-                        />
-                      </Field>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Totale acquisto">
-                          <Input
-                            inputMode="decimal"
-                            value={form.installmentTotalAmount}
-                            onChange={(e) =>
-                              update({ installmentTotalAmount: e.target.value })
-                            }
-                            placeholder="100,00"
-                            className="h-12"
-                          />
-                        </Field>
-                        <Field label="Numero rate">
-                          <Input
-                            type="number"
-                            min="2"
-                            value={form.installmentTotal}
-                            onChange={(e) =>
-                              update({ installmentTotal: e.target.value })
-                            }
-                            placeholder="3"
-                            className="h-12"
-                          />
-                        </Field>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Prima scadenza">
-                          <Input
-                            type="date"
-                            value={form.installmentFirstDueDate}
-                            onChange={(e) =>
-                              update({
-                                installmentFirstDueDate: e.target.value,
-                              })
-                            }
-                            className="h-12"
-                          />
-                        </Field>
-                        <Field label="Frequenza">
-                          <select
-                            value={form.installmentFrequencyMonths}
-                            onChange={(e) =>
-                              update({
-                                installmentFrequencyMonths: e.target.value,
-                              })
-                            }
-                            className="h-12 w-full rounded-xl border bg-white px-3 dark:bg-slate-950"
-                          >
-                            <option value="1">Mensile</option>
-                            <option value="2">Ogni 2 mesi</option>
-                            <option value="3">Trimestrale</option>
-                          </select>
-                        </Field>
-                      </div>
-                      <Field
-                        label="Importo rata previsto"
-                        hint="Solo per il calendario: la spesa reale usa l’importo del movimento."
-                      >
-                        <Input
-                          inputMode="decimal"
-                          value={form.expectedInstallmentAmount}
-                          onChange={(e) =>
-                            update({
-                              expectedInstallmentAmount: e.target.value,
-                            })
-                          }
-                          className="h-12"
-                        />
-                      </Field>
-                    </>
-                  )}
-                </div>
-              )}
               <Field
                 label="Note"
                 question="C’è qualcosa che vorrai ricordare quando rivedrai questa spesa?"
