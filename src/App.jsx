@@ -55,6 +55,9 @@ import {
   setTransactionTags,
   updateMerchantRule,
   updateTransaction,
+  updateInstallmentPlan,
+  linkTransactionToInstallment,
+  unlinkTransactionFromInstallment,
   upsertMerchantRule,
 } from "@/lib/financeDb";
 import CsvImporter from "@/components/CsvImporter";
@@ -789,6 +792,27 @@ function App() {
     }
   }
 
+  async function handleUpdateInstallmentPlan(planId, changes) {
+    const updated = await updateInstallmentPlan(planId, changes);
+    setInstallmentPlans((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setToast({ type: "success", message: "Piano rateale aggiornato" });
+    return updated;
+  }
+
+  async function handleLinkInstallmentTransaction(transactionId, planId, installmentNumber) {
+    const updated = await linkTransactionToInstallment(transactionId, planId, installmentNumber);
+    setTransactions((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setToast({ type: "success", message: "Movimento collegato alla rata" });
+    return updated;
+  }
+
+  async function handleUnlinkInstallmentTransaction(transactionId) {
+    const updated = await unlinkTransactionFromInstallment(transactionId);
+    setTransactions((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setToast({ type: "success", message: "Movimento scollegato dal piano" });
+    return updated;
+  }
+
   function requestDeleteInstallmentPlan(plan) {
     const linkedTransactions = transactions.filter(
       (item) => item.installment_plan_id === plan.id,
@@ -1358,6 +1382,9 @@ function App() {
             onEditTransaction={openEditMovement}
             installmentPlans={installmentPlans}
             onDeleteInstallmentPlan={requestDeleteInstallmentPlan}
+            onUpdateInstallmentPlan={handleUpdateInstallmentPlan}
+            onLinkInstallmentTransaction={handleLinkInstallmentTransaction}
+            onUnlinkInstallmentTransaction={handleUnlinkInstallmentTransaction}
           />
         )}
         {tab === "inbox" && (

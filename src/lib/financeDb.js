@@ -407,3 +407,35 @@ export async function deleteInstallmentPlan(planId) {
 
   return (linkedRows || []).length;
 }
+
+
+export async function updateInstallmentPlan(planId, changes) {
+  await getCurrentUser();
+  const row = {
+    name: String(changes.name || "").trim(),
+    total_amount: Number(changes.totalAmount),
+    total_installments: Number(changes.totalInstallments),
+    frequency_months: Number(changes.frequencyMonths || 1),
+    first_due_date: changes.firstDueDate,
+    expected_installment_amount: changes.expectedInstallmentAmount == null || changes.expectedInstallmentAmount === "" ? null : Number(changes.expectedInstallmentAmount),
+  };
+  const { data, error } = await supabase.from("installment_plans").update(row).eq("id", planId).select("*").single();
+  if (error) throw error;
+  return fromInstallmentPlanRow(data);
+}
+
+export async function linkTransactionToInstallment(transactionId, planId, installmentNumber) {
+  return updateTransaction(transactionId, {
+    installmentPlanId: planId,
+    installmentNumber: Number(installmentNumber),
+    review_status: "verified",
+  });
+}
+
+export async function unlinkTransactionFromInstallment(transactionId) {
+  return updateTransaction(transactionId, {
+    installmentPlanId: null,
+    installmentNumber: null,
+    review_status: "verified",
+  });
+}
