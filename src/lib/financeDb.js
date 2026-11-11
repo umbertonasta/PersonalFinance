@@ -116,12 +116,17 @@ export async function loadFinanceData() {
   const tagMap = new Map();
 
   if (transactionIds.length > 0) {
+    // Do not put hundreds of UUIDs in a single GET query. With a large archive,
+    // PostgREST can reject the URL as 400 Bad Request. RLS already limits the
+    // result to the current user's rows, so loading the tag links directly is safe.
     const { data: tagLinks, error: tagError } = await supabase
       .from("transaction_tags")
-      .select("transaction_id, tag_id")
-      .in("transaction_id", transactionIds);
+      .select("transaction_id, tag_id");
     if (tagError) throw tagError;
+
+    const knownTransactionIds = new Set(transactionIds);
     for (const link of tagLinks || []) {
+      if (!knownTransactionIds.has(link.transaction_id)) continue;
       const current = tagMap.get(link.transaction_id) || [];
       current.push(link.tag_id);
       tagMap.set(link.transaction_id, current);
